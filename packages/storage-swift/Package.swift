@@ -20,6 +20,13 @@ let package = Package(
                 .product(name: "YoloLedgerCore", package: "core-swift"),
             ]
         ),
+        .testTarget(
+            name: "YoloLedgerStorageTests",
+            dependencies: [
+                "YoloLedgerStorage",
+                .product(name: "YoloLedgerCore", package: "core-swift"),
+            ]
+        ),
     ],
     swiftLanguageModes: [.v6]
 )
