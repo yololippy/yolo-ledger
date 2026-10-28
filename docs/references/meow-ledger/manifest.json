@@ -1,0 +1,38 @@
+{
+  "source": "https://apps.apple.com/cn/app/id1483024444",
+  "retrieved_at": "2026-10-28",
+  "store_version": "5.2.7",
+  "note": "Current public App Store promotional screenshots; embedded sample dates are historical. Not a direct capture of every screen in the installed latest app. Reference only; do not bundle these promotional images into the product.",
+  "screenshots": [
+    {
+      "file": "app-store-iphone-1.png",
+      "source_url": "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource211/v4/12/6e/42/126e423b-7779-fd6b-2de1-b36df7dd12bf/37cda6e1-87dc-4f71-859b-6fa6c43f0ffc_1242_2208.png/1242x2208bb.png",
+      "sha256": "7742af15205c71b9b2b8fdf77fa7f9cfda8ab90bd4c768cb8cf4072f248c0693"
+    },
+    {
+      "file": "app-store-iphone-2.png",
+      "source_url": "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/0f/51/f7/0f51f7a9-c98a-1dd4-8028-f36055c2dd7a/eff7bd39-ea4f-4ae3-b1aa-5d8fe8241edf_1242_2208-1.png/1242x2208bb.png",
+      "sha256": "57db8648a76f109adb2acd6cbf08f4f79e495552f58f4446cfdbe39b1c04e9e6"
+    },
+    {
+      "file": "app-store-iphone-3.png",
+      "source_url": "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/80/9b/ee/809bee6a-2dde-0385-6b78-2871e5239dd1/06e074a3-0b10-4202-93fd-13824088231d_1242_2208-2.png/1242x2208bb.png",
+      "sha256": "0a378512c19479eaba80f5748d378c914c464e69b071c480061542aa2838815c"
+    },
+    {
+      "file": "app-store-iphone-4.png",
+      "source_url": "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource211/v4/1c/fd/58/1cfd58fa-e72a-0a4d-c875-77d412a5f55a/deb5c768-d31f-41c5-9cb5-d4bf59be7202_1242_2208-3.png/1242x2208bb.png",
+      "sha256": "34465f9c9b14433524d59e72cf3ae92dd5d523739545d055a1354301206e2834"
+    },
+    {
+      "file": "app-store-iphone-5.png",
+      "source_url": "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/3c/9e/d3/3c9ed35c-a552-2aa6-4a6c-06e6bd812aa6/cbc34523-c24a-4bc4-a658-ae229979b090_1242_2208-4.png/1242x2208bb.png",
+      "sha256": "d5eb676e426eaef528c1891a30033b25d7b9801b50f80b7dd657165b76bc3a26"
+    },
+    {
+      "file": "app-store-iphone-6.png",
+      "source_url": "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/59/5e/85/595e853a-aa88-ced7-03c9-e8c1fef35c38/baefef3b-9d7f-4ef1-a470-389d59c1643c_1242_2208-5.png/1242x2208bb.png",
+      "sha256": "420088afaa9e6f3dde8c2f8bc2f1e5852d40f4782fcca1a05f7259ed69de68fb"
+    }
+  ]
+}
