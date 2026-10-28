@@ -1,0 +1,659 @@
+// !$*UTF8*$!
+{
+	"archiveVersion" = 1;
+	"classes" = {
+	};
+	"objectVersion" = 60;
+	"objects" = {
+		"E72520B01E7E93526CF13634" = {
+			"isa" = "XCLocalSwiftPackageReference";
+			"relativePath" = "../../packages/core-swift";
+		};
+		"C14988DB23EA59C163C9B6E6" = {
+			"isa" = "XCLocalSwiftPackageReference";
+			"relativePath" = "../../packages/storage-swift";
+		};
+		"96F50DD9ED042D970994B9AA" = {
+			"isa" = "XCLocalSwiftPackageReference";
+			"relativePath" = "../../packages/ui-swift";
+		};
+		"B27BB2387B3D1D22E924B387" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Tests/NavigationSmokeTests.swift";
+			"sourceTree" = "<group>";
+		};
+		"B15295CB15D455993A3D897C" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "text.plist.xml";
+			"path" = "Configuration/Mac-Info.plist";
+			"sourceTree" = "<group>";
+		};
+		"93E664E68B3813E48C4CF877" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "text.plist.xml";
+			"path" = "Configuration/IOS-Info.plist";
+			"sourceTree" = "<group>";
+		};
+		"27A50C836AC8195C0653EF72" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "text.plist.entitlements";
+			"path" = "Configuration/YoloLedgerMac.entitlements";
+			"sourceTree" = "<group>";
+		};
+		"3A9B2EFD84612ACCA2F2C156" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "../macos/Sources/YoloLedgerMac/YoloLedgerMacApp.swift";
+			"sourceTree" = "<group>";
+		};
+		"A1F4297F9555F2FEFD81C606" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "3A9B2EFD84612ACCA2F2C156";
+		};
+		"B7473AD119505A7B97EB10DC" = {
+			"isa" = "PBXSourcesBuildPhase";
+			"buildActionMask" = 2147483647;
+			"files" = (
+				"A1F4297F9555F2FEFD81C606",
+			);
+			"runOnlyForDeploymentPostprocessing" = 0;
+		};
+		"6D38E28F8FEE45CC232CDEC2" = {
+			"isa" = "XCSwiftPackageProductDependency";
+			"package" = "E72520B01E7E93526CF13634";
+			"productName" = "YoloLedgerCore";
+		};
+		"225C477C5770864AC0D85514" = {
+			"isa" = "PBXBuildFile";
+			"productRef" = "6D38E28F8FEE45CC232CDEC2";
+		};
+		"2ECAD50275298F47EAC86431" = {
+			"isa" = "XCSwiftPackageProductDependency";
+			"package" = "C14988DB23EA59C163C9B6E6";
+			"productName" = "YoloLedgerStorage";
+		};
+		"FB79ACF1280AF5C3F2598704" = {
+			"isa" = "PBXBuildFile";
+			"productRef" = "2ECAD50275298F47EAC86431";
+		};
+		"199736DF0992AC22D1F763A4" = {
+			"isa" = "XCSwiftPackageProductDependency";
+			"package" = "96F50DD9ED042D970994B9AA";
+			"productName" = "YoloLedgerUI";
+		};
+		"16A349AB74DF5D121E8A5681" = {
+			"isa" = "PBXBuildFile";
+			"productRef" = "199736DF0992AC22D1F763A4";
+		};
+		"1939BE9594013144CF252378" = {
+			"isa" = "PBXFrameworksBuildPhase";
+			"buildActionMask" = 2147483647;
+			"files" = (
+				"225C477C5770864AC0D85514",
+				"FB79ACF1280AF5C3F2598704",
+				"16A349AB74DF5D121E8A5681",
+			);
+			"runOnlyForDeploymentPostprocessing" = 0;
+		};
+		"C96E8A0454B3BA3BC3652AB7" = {
+			"isa" = "PBXResourcesBuildPhase";
+			"buildActionMask" = 2147483647;
+			"files" = ();
+			"runOnlyForDeploymentPostprocessing" = 0;
+		};
+		"A35EF5C906A7CB0141EF8B3F" = {
+			"isa" = "PBXFileReference";
+			"explicitFileType" = "wrapper.application";
+			"includeInIndex" = 0;
+			"path" = "YoloLedgerMac.app";
+			"sourceTree" = "BUILT_PRODUCTS_DIR";
+		};
+		"FDA817A97D5849442244FF0F" = {
+			"isa" = "XCBuildConfiguration";
+			"buildSettings" = {
+				"CODE_SIGN_STYLE" = "Automatic";
+				"CURRENT_PROJECT_VERSION" = "1";
+				"MARKETING_VERSION" = "0.1.0";
+				"GENERATE_INFOPLIST_FILE" = "NO";
+				"PRODUCT_NAME" = "$(TARGET_NAME)";
+				"SWIFT_EMIT_LOC_STRINGS" = "NO";
+				"SDKROOT" = "macosx";
+				"SUPPORTED_PLATFORMS" = "macosx";
+				"MACOSX_DEPLOYMENT_TARGET" = "14.0";
+				"CODE_SIGN_IDENTITY" = "-";
+				"ENABLE_APP_SANDBOX" = "YES";
+				"ENABLE_HARDENED_RUNTIME" = "YES";
+				"CODE_SIGN_ENTITLEMENTS" = "Configuration/YoloLedgerMac.entitlements";
+				"INFOPLIST_FILE" = "Configuration/Mac-Info.plist";
+				"PRODUCT_BUNDLE_IDENTIFIER" = "com.yololedger.macos";
+			};
+			"name" = "Debug";
+		};
+		"C3A45F6CDFBFE98A16C682F0" = {
+			"isa" = "XCBuildConfiguration";
+			"buildSettings" = {
+				"CODE_SIGN_STYLE" = "Automatic";
+				"CURRENT_PROJECT_VERSION" = "1";
+				"MARKETING_VERSION" = "0.1.0";
+				"GENERATE_INFOPLIST_FILE" = "NO";
+				"PRODUCT_NAME" = "$(TARGET_NAME)";
+				"SWIFT_EMIT_LOC_STRINGS" = "NO";
+				"SDKROOT" = "macosx";
+				"SUPPORTED_PLATFORMS" = "macosx";
+				"MACOSX_DEPLOYMENT_TARGET" = "14.0";
+				"CODE_SIGN_IDENTITY" = "-";
+				"ENABLE_APP_SANDBOX" = "YES";
+				"ENABLE_HARDENED_RUNTIME" = "YES";
+				"CODE_SIGN_ENTITLEMENTS" = "Configuration/YoloLedgerMac.entitlements";
+				"INFOPLIST_FILE" = "Configuration/Mac-Info.plist";
+				"PRODUCT_BUNDLE_IDENTIFIER" = "com.yololedger.macos";
+			};
+			"name" = "Release";
+		};
+		"BE6C7F1C63BBE2DE0DEA7B4C" = {
+			"isa" = "XCConfigurationList";
+			"buildConfigurations" = (
+				"FDA817A97D5849442244FF0F",
+				"C3A45F6CDFBFE98A16C682F0",
+			);
+			"defaultConfigurationIsVisible" = 0;
+			"defaultConfigurationName" = "Release";
+		};
+		"DA01A563512A61CED9C1988A" = {
+			"isa" = "PBXNativeTarget";
+			"buildConfigurationList" = "BE6C7F1C63BBE2DE0DEA7B4C";
+			"buildPhases" = (
+				"B7473AD119505A7B97EB10DC",
+				"1939BE9594013144CF252378",
+				"C96E8A0454B3BA3BC3652AB7",
+			);
+			"buildRules" = ();
+			"dependencies" = ();
+			"name" = "YoloLedgerMac";
+			"packageProductDependencies" = (
+				"6D38E28F8FEE45CC232CDEC2",
+				"2ECAD50275298F47EAC86431",
+				"199736DF0992AC22D1F763A4",
+			);
+			"productName" = "YoloLedgerMac";
+			"productReference" = "A35EF5C906A7CB0141EF8B3F";
+			"productType" = "com.apple.product-type.application";
+		};
+		"DC7169BEF1DC04A445E448D7" = {
+			"isa" = "PBXFileReference";
+			"explicitFileType" = "wrapper.cfbundle";
+			"includeInIndex" = 0;
+			"path" = "YoloLedgerMacUITests.xctest";
+			"sourceTree" = "BUILT_PRODUCTS_DIR";
+		};
+		"9A17D0EA11287088DCD372B0" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "B27BB2387B3D1D22E924B387";
+		};
+		"89D613E88AE96CE85A3B9A8F" = {
+			"isa" = "PBXSourcesBuildPhase";
+			"buildActionMask" = 2147483647;
+			"files" = (
+				"9A17D0EA11287088DCD372B0",
+			);
+			"runOnlyForDeploymentPostprocessing" = 0;
+		};
+		"7F6A7E127E38FD0AF3864C4C" = {
+			"isa" = "PBXFrameworksBuildPhase";
+			"buildActionMask" = 2147483647;
+			"files" = ();
+			"runOnlyForDeploymentPostprocessing" = 0;
+		};
+		"AA7C8825DB8381B8A6726A04" = {
+			"isa" = "PBXResourcesBuildPhase";
+			"buildActionMask" = 2147483647;
+			"files" = ();
+			"runOnlyForDeploymentPostprocessing" = 0;
+		};
+		"485BD764967FC3586996DB13" = {
+			"isa" = "PBXContainerItemProxy";
+			"containerPortal" = "98F54143AB4E86B28C3AFEE0";
+			"proxyType" = 1;
+			"remoteGlobalIDString" = "DA01A563512A61CED9C1988A";
+			"remoteInfo" = "YoloLedgerMac";
+		};
+		"D1DC91181E8B24BBB0C1FD5F" = {
+			"isa" = "PBXTargetDependency";
+			"target" = "DA01A563512A61CED9C1988A";
+			"targetProxy" = "485BD764967FC3586996DB13";
+		};
+		"92F5E71D73359B0DC7E1CC96" = {
+			"isa" = "XCBuildConfiguration";
+			"buildSettings" = {
+				"CODE_SIGN_STYLE" = "Automatic";
+				"GENERATE_INFOPLIST_FILE" = "YES";
+				"PRODUCT_NAME" = "$(TARGET_NAME)";
+				"PRODUCT_BUNDLE_IDENTIFIER" = "com.yololedger.macos.uitests";
+				"TEST_TARGET_NAME" = "YoloLedgerMac";
+				"SDKROOT" = "macosx";
+				"SUPPORTED_PLATFORMS" = "macosx";
+				"MACOSX_DEPLOYMENT_TARGET" = "14.0";
+				"CODE_SIGN_IDENTITY" = "-";
+				"ENABLE_APP_SANDBOX" = "NO";
+				"ENABLE_HARDENED_RUNTIME" = "NO";
+			};
+			"name" = "Debug";
+		};
+		"019F1A81ECEAF773B3A495E5" = {
+			"isa" = "XCBuildConfiguration";
+			"buildSettings" = {
+				"CODE_SIGN_STYLE" = "Automatic";
+				"GENERATE_INFOPLIST_FILE" = "YES";
+				"PRODUCT_NAME" = "$(TARGET_NAME)";
+				"PRODUCT_BUNDLE_IDENTIFIER" = "com.yololedger.macos.uitests";
+				"TEST_TARGET_NAME" = "YoloLedgerMac";
+				"SDKROOT" = "macosx";
+				"SUPPORTED_PLATFORMS" = "macosx";
+				"MACOSX_DEPLOYMENT_TARGET" = "14.0";
+				"CODE_SIGN_IDENTITY" = "-";
+				"ENABLE_APP_SANDBOX" = "NO";
+				"ENABLE_HARDENED_RUNTIME" = "NO";
+			};
+			"name" = "Release";
+		};
+		"FE2727082506FF5EB354164F" = {
+			"isa" = "XCConfigurationList";
+			"buildConfigurations" = (
+				"92F5E71D73359B0DC7E1CC96",
+				"019F1A81ECEAF773B3A495E5",
+			);
+			"defaultConfigurationIsVisible" = 0;
+			"defaultConfigurationName" = "Release";
+		};
+		"4EF992AAC832339008981130" = {
+			"isa" = "PBXNativeTarget";
+			"buildConfigurationList" = "FE2727082506FF5EB354164F";
+			"buildPhases" = (
+				"89D613E88AE96CE85A3B9A8F",
+				"7F6A7E127E38FD0AF3864C4C",
+				"AA7C8825DB8381B8A6726A04",
+			);
+			"buildRules" = ();
+			"dependencies" = (
+				"D1DC91181E8B24BBB0C1FD5F",
+			);
+			"name" = "YoloLedgerMacUITests";
+			"productName" = "YoloLedgerMacUITests";
+			"productReference" = "DC7169BEF1DC04A445E448D7";
+			"productType" = "com.apple.product-type.bundle.ui-testing";
+		};
+		"26E8A0B31766B1D37A226662" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "../ios/Sources/YoloLedgerIOS/YoloLedgerIOSApp.swift";
+			"sourceTree" = "<group>";
+		};
+		"5E2B95AF406AC18640E40867" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "26E8A0B31766B1D37A226662";
+		};
+		"7E1FC5A1F6A92982A7295444" = {
+			"isa" = "PBXSourcesBuildPhase";
+			"buildActionMask" = 2147483647;
+			"files" = (
+				"5E2B95AF406AC18640E40867",
+			);
+			"runOnlyForDeploymentPostprocessing" = 0;
+		};
+		"9E96CF6689354F1E24683F5D" = {
+			"isa" = "XCSwiftPackageProductDependency";
+			"package" = "E72520B01E7E93526CF13634";
+			"productName" = "YoloLedgerCore";
+		};
+		"42A7206171B5703EAB278C3A" = {
+			"isa" = "PBXBuildFile";
+			"productRef" = "9E96CF6689354F1E24683F5D";
+		};
+		"1F7485D386A4BB6DFB6CFCFB" = {
+			"isa" = "XCSwiftPackageProductDependency";
+			"package" = "C14988DB23EA59C163C9B6E6";
+			"productName" = "YoloLedgerStorage";
+		};
+		"0CF3A7A2F415A6C39994E621" = {
+			"isa" = "PBXBuildFile";
+			"productRef" = "1F7485D386A4BB6DFB6CFCFB";
+		};
+		"BEA03B7E7D734D40261D8C89" = {
+			"isa" = "XCSwiftPackageProductDependency";
+			"package" = "96F50DD9ED042D970994B9AA";
+			"productName" = "YoloLedgerUI";
+		};
+		"550846330A71BD9DAECDAC13" = {
+			"isa" = "PBXBuildFile";
+			"productRef" = "BEA03B7E7D734D40261D8C89";
+		};
+		"4BAA121DC3376EE752012790" = {
+			"isa" = "PBXFrameworksBuildPhase";
+			"buildActionMask" = 2147483647;
+			"files" = (
+				"42A7206171B5703EAB278C3A",
+				"0CF3A7A2F415A6C39994E621",
+				"550846330A71BD9DAECDAC13",
+			);
+			"runOnlyForDeploymentPostprocessing" = 0;
+		};
+		"89DAECB0DC4FCEC7EE673931" = {
+			"isa" = "PBXResourcesBuildPhase";
+			"buildActionMask" = 2147483647;
+			"files" = ();
+			"runOnlyForDeploymentPostprocessing" = 0;
+		};
+		"260F1FDEC28FBEA081D2568B" = {
+			"isa" = "PBXFileReference";
+			"explicitFileType" = "wrapper.application";
+			"includeInIndex" = 0;
+			"path" = "YoloLedgerIOS.app";
+			"sourceTree" = "BUILT_PRODUCTS_DIR";
+		};
+		"E7903DE9D339721EDA1CA913" = {
+			"isa" = "XCBuildConfiguration";
+			"buildSettings" = {
+				"CODE_SIGN_STYLE" = "Automatic";
+				"CURRENT_PROJECT_VERSION" = "1";
+				"MARKETING_VERSION" = "0.1.0";
+				"GENERATE_INFOPLIST_FILE" = "NO";
+				"PRODUCT_NAME" = "$(TARGET_NAME)";
+				"SWIFT_EMIT_LOC_STRINGS" = "NO";
+				"SDKROOT" = "iphoneos";
+				"SUPPORTED_PLATFORMS" = "iphoneos iphonesimulator";
+				"IPHONEOS_DEPLOYMENT_TARGET" = "17.0";
+				"TARGETED_DEVICE_FAMILY" = "1";
+				"SUPPORTS_MACCATALYST" = "NO";
+				"SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD" = "NO";
+				"SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD" = "NO";
+				"CODE_SIGN_IDENTITY[sdk=iphonesimulator*]" = "-";
+				"INFOPLIST_FILE" = "Configuration/IOS-Info.plist";
+				"PRODUCT_BUNDLE_IDENTIFIER" = "com.yololedger.ios";
+			};
+			"name" = "Debug";
+		};
+		"C35E517F113B3BE8B646CD4E" = {
+			"isa" = "XCBuildConfiguration";
+			"buildSettings" = {
+				"CODE_SIGN_STYLE" = "Automatic";
+				"CURRENT_PROJECT_VERSION" = "1";
+				"MARKETING_VERSION" = "0.1.0";
+				"GENERATE_INFOPLIST_FILE" = "NO";
+				"PRODUCT_NAME" = "$(TARGET_NAME)";
+				"SWIFT_EMIT_LOC_STRINGS" = "NO";
+				"SDKROOT" = "iphoneos";
+				"SUPPORTED_PLATFORMS" = "iphoneos iphonesimulator";
+				"IPHONEOS_DEPLOYMENT_TARGET" = "17.0";
+				"TARGETED_DEVICE_FAMILY" = "1";
+				"SUPPORTS_MACCATALYST" = "NO";
+				"SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD" = "NO";
+				"SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD" = "NO";
+				"CODE_SIGN_IDENTITY[sdk=iphonesimulator*]" = "-";
+				"INFOPLIST_FILE" = "Configuration/IOS-Info.plist";
+				"PRODUCT_BUNDLE_IDENTIFIER" = "com.yololedger.ios";
+			};
+			"name" = "Release";
+		};
+		"196A4EB56F7E839633E43207" = {
+			"isa" = "XCConfigurationList";
+			"buildConfigurations" = (
+				"E7903DE9D339721EDA1CA913",
+				"C35E517F113B3BE8B646CD4E",
+			);
+			"defaultConfigurationIsVisible" = 0;
+			"defaultConfigurationName" = "Release";
+		};
+		"3A747228B6663AA6FDE93B25" = {
+			"isa" = "PBXNativeTarget";
+			"buildConfigurationList" = "196A4EB56F7E839633E43207";
+			"buildPhases" = (
+				"7E1FC5A1F6A92982A7295444",
+				"4BAA121DC3376EE752012790",
+				"89DAECB0DC4FCEC7EE673931",
+			);
+			"buildRules" = ();
+			"dependencies" = ();
+			"name" = "YoloLedgerIOS";
+			"packageProductDependencies" = (
+				"9E96CF6689354F1E24683F5D",
+				"1F7485D386A4BB6DFB6CFCFB",
+				"BEA03B7E7D734D40261D8C89",
+			);
+			"productName" = "YoloLedgerIOS";
+			"productReference" = "260F1FDEC28FBEA081D2568B";
+			"productType" = "com.apple.product-type.application";
+		};
+		"818B7AE27F7F40B6811E009D" = {
+			"isa" = "PBXFileReference";
+			"explicitFileType" = "wrapper.cfbundle";
+			"includeInIndex" = 0;
+			"path" = "YoloLedgerIOSUITests.xctest";
+			"sourceTree" = "BUILT_PRODUCTS_DIR";
+		};
+		"31D827DD6A65947AF5762397" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "B27BB2387B3D1D22E924B387";
+		};
+		"6E802B7A2B84F59B24B2725B" = {
+			"isa" = "PBXSourcesBuildPhase";
+			"buildActionMask" = 2147483647;
+			"files" = (
+				"31D827DD6A65947AF5762397",
+			);
+			"runOnlyForDeploymentPostprocessing" = 0;
+		};
+		"7BF4E3A53CE3B93C0E803543" = {
+			"isa" = "PBXFrameworksBuildPhase";
+			"buildActionMask" = 2147483647;
+			"files" = ();
+			"runOnlyForDeploymentPostprocessing" = 0;
+		};
+		"34531571D47603FD37F3CFC3" = {
+			"isa" = "PBXResourcesBuildPhase";
+			"buildActionMask" = 2147483647;
+			"files" = ();
+			"runOnlyForDeploymentPostprocessing" = 0;
+		};
+		"BCA891487CCED9512E515316" = {
+			"isa" = "PBXContainerItemProxy";
+			"containerPortal" = "98F54143AB4E86B28C3AFEE0";
+			"proxyType" = 1;
+			"remoteGlobalIDString" = "3A747228B6663AA6FDE93B25";
+			"remoteInfo" = "YoloLedgerIOS";
+		};
+		"85F792E3E30D8A0C90645A7A" = {
+			"isa" = "PBXTargetDependency";
+			"target" = "3A747228B6663AA6FDE93B25";
+			"targetProxy" = "BCA891487CCED9512E515316";
+		};
+		"99FC20D007F59C19458CDD36" = {
+			"isa" = "XCBuildConfiguration";
+			"buildSettings" = {
+				"CODE_SIGN_STYLE" = "Automatic";
+				"GENERATE_INFOPLIST_FILE" = "YES";
+				"PRODUCT_NAME" = "$(TARGET_NAME)";
+				"PRODUCT_BUNDLE_IDENTIFIER" = "com.yololedger.ios.uitests";
+				"TEST_TARGET_NAME" = "YoloLedgerIOS";
+				"SDKROOT" = "iphoneos";
+				"SUPPORTED_PLATFORMS" = "iphoneos iphonesimulator";
+				"IPHONEOS_DEPLOYMENT_TARGET" = "17.0";
+				"TARGETED_DEVICE_FAMILY" = "1";
+				"SUPPORTS_MACCATALYST" = "NO";
+				"SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD" = "NO";
+				"SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD" = "NO";
+				"CODE_SIGN_IDENTITY[sdk=iphonesimulator*]" = "-";
+			};
+			"name" = "Debug";
+		};
+		"D5ECB87BDDDC6BB9B644B9C9" = {
+			"isa" = "XCBuildConfiguration";
+			"buildSettings" = {
+				"CODE_SIGN_STYLE" = "Automatic";
+				"GENERATE_INFOPLIST_FILE" = "YES";
+				"PRODUCT_NAME" = "$(TARGET_NAME)";
+				"PRODUCT_BUNDLE_IDENTIFIER" = "com.yololedger.ios.uitests";
+				"TEST_TARGET_NAME" = "YoloLedgerIOS";
+				"SDKROOT" = "iphoneos";
+				"SUPPORTED_PLATFORMS" = "iphoneos iphonesimulator";
+				"IPHONEOS_DEPLOYMENT_TARGET" = "17.0";
+				"TARGETED_DEVICE_FAMILY" = "1";
+				"SUPPORTS_MACCATALYST" = "NO";
+				"SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD" = "NO";
+				"SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD" = "NO";
+				"CODE_SIGN_IDENTITY[sdk=iphonesimulator*]" = "-";
+			};
+			"name" = "Release";
+		};
+		"45637BF2A47A53F42E7FFDFB" = {
+			"isa" = "XCConfigurationList";
+			"buildConfigurations" = (
+				"99FC20D007F59C19458CDD36",
+				"D5ECB87BDDDC6BB9B644B9C9",
+			);
+			"defaultConfigurationIsVisible" = 0;
+			"defaultConfigurationName" = "Release";
+		};
+		"569B6DCF629BDAED16D4A2D1" = {
+			"isa" = "PBXNativeTarget";
+			"buildConfigurationList" = "45637BF2A47A53F42E7FFDFB";
+			"buildPhases" = (
+				"6E802B7A2B84F59B24B2725B",
+				"7BF4E3A53CE3B93C0E803543",
+				"34531571D47603FD37F3CFC3",
+			);
+			"buildRules" = ();
+			"dependencies" = (
+				"85F792E3E30D8A0C90645A7A",
+			);
+			"name" = "YoloLedgerIOSUITests";
+			"productName" = "YoloLedgerIOSUITests";
+			"productReference" = "818B7AE27F7F40B6811E009D";
+			"productType" = "com.apple.product-type.bundle.ui-testing";
+		};
+		"B9A090D378DDFDB259194AF4" = {
+			"isa" = "PBXGroup";
+			"children" = (
+				"3A9B2EFD84612ACCA2F2C156",
+				"26E8A0B31766B1D37A226662",
+			);
+			"name" = "App Entries";
+			"sourceTree" = "<group>";
+		};
+		"0652E436F42D75F5672A8BD9" = {
+			"isa" = "PBXGroup";
+			"children" = (
+				"B15295CB15D455993A3D897C",
+				"93E664E68B3813E48C4CF877",
+				"27A50C836AC8195C0653EF72",
+			);
+			"name" = "Configuration";
+			"sourceTree" = "<group>";
+		};
+		"04D13FD0AA6F0197CF2C9990" = {
+			"isa" = "PBXGroup";
+			"children" = (
+				"B27BB2387B3D1D22E924B387",
+			);
+			"name" = "Navigation Tests";
+			"sourceTree" = "<group>";
+		};
+		"FBDC4F23F93125BBEEAE800C" = {
+			"isa" = "PBXGroup";
+			"children" = (
+				"A35EF5C906A7CB0141EF8B3F",
+				"DC7169BEF1DC04A445E448D7",
+				"260F1FDEC28FBEA081D2568B",
+				"818B7AE27F7F40B6811E009D",
+			);
+			"name" = "Products";
+			"sourceTree" = "<group>";
+		};
+		"DC76E9F0C0006E8F919E0C51" = {
+			"isa" = "PBXGroup";
+			"children" = (
+				"B9A090D378DDFDB259194AF4",
+				"0652E436F42D75F5672A8BD9",
+				"04D13FD0AA6F0197CF2C9990",
+				"FBDC4F23F93125BBEEAE800C",
+			);
+			"sourceTree" = "<group>";
+		};
+		"ED8772ADEC3A6C25161BC957" = {
+			"isa" = "XCBuildConfiguration";
+			"buildSettings" = {
+				"CLANG_ENABLE_MODULES" = "YES";
+				"SWIFT_VERSION" = "6.0";
+				"SWIFT_STRICT_CONCURRENCY" = "complete";
+				"SWIFT_OPTIMIZATION_LEVEL" = "-Onone";
+				"ONLY_ACTIVE_ARCH" = "YES";
+				"SWIFT_ACTIVE_COMPILATION_CONDITIONS" = "DEBUG";
+				"ENABLE_TESTABILITY" = "YES";
+				"DEBUG_INFORMATION_FORMAT" = "dwarf";
+			};
+			"name" = "Debug";
+		};
+		"00F209874A1F7309F6DCEAA7" = {
+			"isa" = "XCBuildConfiguration";
+			"buildSettings" = {
+				"CLANG_ENABLE_MODULES" = "YES";
+				"SWIFT_VERSION" = "6.0";
+				"SWIFT_STRICT_CONCURRENCY" = "complete";
+				"SWIFT_OPTIMIZATION_LEVEL" = "-O";
+				"ONLY_ACTIVE_ARCH" = "NO";
+				"SWIFT_COMPILATION_MODE" = "wholemodule";
+				"DEBUG_INFORMATION_FORMAT" = "dwarf-with-dsym";
+			};
+			"name" = "Release";
+		};
+		"640DC9EFD529235A8D9E2727" = {
+			"isa" = "XCConfigurationList";
+			"buildConfigurations" = (
+				"ED8772ADEC3A6C25161BC957",
+				"00F209874A1F7309F6DCEAA7",
+			);
+			"defaultConfigurationIsVisible" = 0;
+			"defaultConfigurationName" = "Release";
+		};
+		"98F54143AB4E86B28C3AFEE0" = {
+			"isa" = "PBXProject";
+			"attributes" = {
+				"BuildIndependentTargetsInParallel" = "YES";
+				"LastUpgradeCheck" = "2710";
+				"TargetAttributes" = {
+					"4EF992AAC832339008981130" = {
+						"TestTargetID" = "DA01A563512A61CED9C1988A";
+					};
+					"569B6DCF629BDAED16D4A2D1" = {
+						"TestTargetID" = "3A747228B6663AA6FDE93B25";
+					};
+				};
+			};
+			"buildConfigurationList" = "640DC9EFD529235A8D9E2727";
+			"compatibilityVersion" = "Xcode 14.0";
+			"developmentRegion" = "zh_CN";
+			"hasScannedForEncodings" = 0;
+			"knownRegions" = (
+				"zh_CN",
+				"en",
+				"Base",
+			);
+			"mainGroup" = "DC76E9F0C0006E8F919E0C51";
+			"packageReferences" = (
+				"E72520B01E7E93526CF13634",
+				"C14988DB23EA59C163C9B6E6",
+				"96F50DD9ED042D970994B9AA",
+			);
+			"productRefGroup" = "FBDC4F23F93125BBEEAE800C";
+			"projectDirPath" = "";
+			"projectRoot" = "";
+			"targets" = (
+				"DA01A563512A61CED9C1988A",
+				"4EF992AAC832339008981130",
+				"3A747228B6663AA6FDE93B25",
+				"569B6DCF629BDAED16D4A2D1",
+			);
+		};
+	};
+	"rootObject" = "98F54143AB4E86B28C3AFEE0";
+}
