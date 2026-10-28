@@ -1,15 +1,13 @@
 # macOS App
 
-用于有落 Mac App 的入口、窗口、菜单、快捷键和桌面布局适配。
+`Sources/YoloLedgerMac/YoloLedgerMacApp.swift` 为原生 Mac 入口，由 `YoloLedgerMac` target 构建。入口持有长期存在的启动状态，通过共用的 App 组装代码打开 SwiftData 磁盘仓库并注入 UI。
 
-由 `apps/xcode/` 中的 `YoloLedgerMac` 原生 macOS target 构建，入口位于 `Sources/YoloLedgerMac/YoloLedgerMacApp.swift`。入口将 `EmptyLedgerBookRepository` 注入共享根页面，与 iPhone 端共享 UI 与核心接口。
+当前支持本地手动收支、详情／编辑／确认删除、基础账本管理及选择、当前月汇总。账单／明细页支持 Cmd+N；表单支持默认保存键盘动作。
 
-当前本地开发设备（2026-10-28 读取）：Mac mini（Mac18,5）、Apple M6、24 GB 内存、arm64，运行 macOS 27.0.1（26A434）。
+Bundle ID：`com.yololedger.macos`。当前开发机为 Mac mini（Apple M6、24 GB、arm64），运行 macOS 27.0.1（26A434）。工程临时构建基线是 macOS 14，正式最低支持版本仍待确定。
 
-当前是 M1 侧边栏与内容区骨架，包含账单、明细、账本、设置四个入口，尚无真实账目或持久化。Bundle ID：`com.yololedger.macos`。
+main 于 2026-10-28 使用独立 DEBUG 账库进行 native computer-use 验收：新增支出、修改金额与中文备注、收入分类、月度收支结余、账本创建／重命名／切换，以及重启保留均已通过。删除确认与取消已验证；真正确认删除的端到端流程由 iPhone XCTest 覆盖。后续复测还确认 Cmd+N、Return 保存、金额标签及编辑后详情辅助功能金额立即更新。
 
-2026-10-28：macOS arm64 Debug 构建通过，App 已实际启动。main 使用 native computer-use 实际点击“明细 → 账本 → 设置 → 账单”，逐页核对窗口标题、选中行、空状态或设置说明，并检查最终截图，实际导航验收通过。
+M1 的 Mac XCTest runner 因 automation mode 初始化超时未能执行；本轮未再次运行该 runner 或触发系统密码请求。Mac 实际操作验收与 XCTest 结果分别记录。
 
-Mac XCUITest runner 因 `Timed out while enabling automation mode` 未能开始执行导航测试；上述实际点击是独立验收证据，不能将本次 XCTest 描述为通过。
-
-工程临时构建基线为 macOS 14，正式最低支持版本仍待确定。构建运行命令、产物与验证边界见 [Xcode 工程说明](../xcode/README.md)。
+最新 main 构建日志为 `/tmp/yolo-ledger-m2-macos-final-build.log`。隔离账库启动命令、构建产物与验证证据见 [Xcode 工程说明](../xcode/README.md)。

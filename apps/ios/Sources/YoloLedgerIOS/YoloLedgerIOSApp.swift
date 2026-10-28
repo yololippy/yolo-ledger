@@ -1,12 +1,12 @@
 import SwiftUI
-import YoloLedgerStorage
-import YoloLedgerUI
 
 @main
 struct YoloLedgerIOSApp: App {
+    @State private var bootstrap = LedgerAppBootstrap()
+
     var body: some Scene {
         WindowGroup {
-            YoloLedgerRootView(repository: EmptyLedgerBookRepository())
+            LedgerAppContent(bootstrap: bootstrap)
         }
     }
 }

@@ -4,10 +4,8 @@
 
 - [macos/](macos/README.md)：Mac 原生 App 入口及桌面适配。
 - [ios/](ios/README.md)：iPhone 原生 App 入口及移动平台适配。
-- [xcode/](xcode/README.md)：统一 Xcode 工程和双端构建配置。
+- [xcode/](xcode/README.md)：统一工程、构建配置、共享启动组装及验证说明。
 
-应用层负责组装共享模块、注入依赖和接入平台能力。记账规则、统计计算和本地存储实现放在对应的 `packages/` 模块中。
+当前已从 M1 空仓库切换到 M2 的 `SwiftDataLedgerRepository`。两个 App 入口各自长期持有一个启动状态与磁盘仓库；`apps/xcode/Support/LedgerAppBootstrap.swift` 在应用层组装存储和共享 UI。打开账库失败会显示可重试错误，不会回退到内存、清库或终止 App。
 
-当前已建立 M1 原生双端入口、统一 Xcode 工程及共享四页导航。两个入口均注入 `EmptyLedgerBookRepository`，账本结果为空；尚无持久化或记账 CRUD。
-
-App 显示名为“有落”，英文名为 YoloLedger。构建命令、产物位置和实际验证边界见 [Xcode 工程说明](xcode/README.md)。
+App 显示名为“有落”，英文名为 YoloLedger。当前支持本地手动记账、基本账本切换和当前月汇总；iCloud 暂未接入。构建命令、独立测试账库、产物与证据见 [工程说明](xcode/README.md)。

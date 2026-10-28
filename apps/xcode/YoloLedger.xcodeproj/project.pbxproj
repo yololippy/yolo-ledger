@@ -5,6 +5,20 @@
 	};
 	"objectVersion" = 60;
 	"objects" = {
+		"320DE53331A6735B3BFC73F0" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Support/LedgerAppBootstrap.swift";
+			"sourceTree" = "<group>";
+		};
+		"3DC78500410996F5599AB7DD" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "320DE53331A6735B3BFC73F0";
+		};
+		"51A4773BFFC96DEBC9DAB537" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "320DE53331A6735B3BFC73F0";
+		};
 		"E72520B01E7E93526CF13634" = {
 			"isa" = "XCLocalSwiftPackageReference";
 			"relativePath" = "../../packages/core-swift";
@@ -56,6 +70,7 @@
 			"buildActionMask" = 2147483647;
 			"files" = (
 				"A1F4297F9555F2FEFD81C606",
+				"3DC78500410996F5599AB7DD",
 			);
 			"runOnlyForDeploymentPostprocessing" = 0;
 		};
@@ -298,6 +313,7 @@
 			"buildActionMask" = 2147483647;
 			"files" = (
 				"5E2B95AF406AC18640E40867",
+				"51A4773BFFC96DEBC9DAB537",
 			);
 			"runOnlyForDeploymentPostprocessing" = 0;
 		};
@@ -572,6 +588,7 @@
 		"DC76E9F0C0006E8F919E0C51" = {
 			"isa" = "PBXGroup";
 			"children" = (
+				"320DE53331A6735B3BFC73F0",
 				"B9A090D378DDFDB259194AF4",
 				"0652E436F42D75F5672A8BD9",
 				"04D13FD0AA6F0197CF2C9990",
