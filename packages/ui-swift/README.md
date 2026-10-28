@@ -1,20 +1,57 @@
 # 共享界面模块
 
-Swift 模块与 library：`YoloLedgerUI`，仅依赖 `../core-swift` 的 `YoloLedgerCore`。
+Swift module / library：`YoloLedgerUI`，仅依赖本地 `YoloLedgerCore`。
 
-当前为 M1 页面骨架：账单、明细、账本、设置四个入口。iPhone 使用 TabView / NavigationStack，Mac 使用 NavigationSplitView 侧边栏。页面是中文占位，尚未还原喵喵记账的完整样式或实现记账业务。
+`YoloLedgerRootView(repository:)` 接受 `any LedgerRepository`，不直接引用 SwiftData。App 长期持有磁盘仓库，根页面的 `LedgerAppModel` 为所有入口提供同一套账本、分类和账目状态。
 
-App 通过 `YoloLedgerRootView(repository:)` 注入 `any LedgerBookRepository`。账本页实际调用 `fetchBooks()`，展示加载、空结果、账本列表和失败重试状态。请求使用代次标识，旧请求或取消请求不能覆盖新请求的结果。本包不直接依赖存储模块或具体数据库。
+## 界面与功能
 
-## 构建与测试
+当前页面属于已完成记账功能验证的历史临时界面，后续将替换为有落自己的视觉与交互设计。分类插画继续使用项目内代码绘制，营销图片与外部角色素材不打包进 App。
 
-在仓库根目录执行：
+## 主题架构
+
+- 所有共享页面、组件和代码绘制插画均从 SwiftUI 环境读取 `LedgerTheme`，页面文件内不保存 RGB 色值。
+- [LedgerThemeValues.swift](Sources/YoloLedgerUI/LedgerThemeValues.swift) 集中定义语义色和当前 `.pastel` 主题；新增暗黑模式或其他主题时增加一个主题预设即可。
+- App 组装层通过 `.ledgerTheme(.pastel)` 注入当前主题，未来可在这里跟随系统外观或用户设置切换，不需要逐页改颜色。
+- 当前底部导航、数字键盘和账目详情的大面积背景统一使用粉彩浅蓝 `#C6E2FF`；亮系统蓝仍用于 tint 与选中态，橙色保留为关键动作色。
+
+- iPhone 使用固定底栏：明细、账单、中央加号、账本、我的。Mac 使用同色系桌面侧栏，支持 Cmd+N 和保存默认键盘动作。
+- 记账页使用四列圆形分类与四列数字键盘；可选择支出／收入、真实分类、账本、日期和备注。备注键盘可收起，继续使用数字键盘。
+- 支出分类按用户实机截图排列：餐饮、交通、购物、宠物、住房、零食、旅行、通讯、医疗、Pos、其它、礼金、运动，并在末尾保留原有日用；收入为工资、奖金、其他收入。分类网格可滚动，猫咪、住房、蛋糕、飞机、电话、医疗箱、票券、省略号、礼金袋和运动鞋使用代码绘制的插画。
+- 分类圆形按钮最大为 70 点，窄列随实际可用宽度等比缩小，维持四列，避免固定宽度挤出网格；切换收支类型时滚动位置回到顶部。
+- 数字键盘支持加减表达式，保存调用 Core 的 `LedgerAmountExpression.evaluate`；例如 `12.34+7.66-5` 保存为 `15.00`，非法表达式保留输入。
+- 账单按所选月份显示真实收支、结余、黄色支出／粉色收入条及日分组记录。
+- 明细提供真实月日历、前后月切换、每日结余、日期选择、当日收支及列表筛选；再次点击同一天或“查看整月”取消日期筛选。
+- 详情使用白色票据、虚线和锯齿底边，支持编辑与确认删除。账本支持新建、重命名、切换；“我的”展示本地数据说明。
+
+账本与“我的”未在参考截图中完整展示，按同一视觉组件适配现有功能，不声称精确还原未知页面。未增加预算、猫咪游戏、存钱等无对应实现的入口。完整分类管理、图表、导入导出、定时记账和 iCloud 仍属于后续阶段。
+
+## 状态与数据
+
+- 金额解析、格式化、日期范围和汇总使用 Core；月份、日期均按当前系统本地时区计算，前台恢复会刷新数据并保留浏览月份。
+- 保存成功会切到记录所属月份，并清理不匹配的日期筛选，让新建或改期后的记录可见。
+- 保存中禁止重复提交和继续编辑输入；失败保留输入。新建 UUID 在编辑器生命周期内保持不变。
+- 写入成功但刷新失败仍保留返回记录并提示“已保存，但刷新失败”；重试只读取，不再次写入。
+- 刷新使用代次标识，旧请求或取消请求不能覆盖新快照。重命名其他账本不改变当前选择。
+
+## 验证
 
 ```sh
 DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift build --package-path packages/ui-swift
 DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test --package-path packages/ui-swift
 ```
 
-2026-10-28：独立构建通过，4 项 Swift Testing 测试通过，覆盖注入仓库结果、空结果、失败后重试，以及取消旧请求后快速重新加载的竞态。Mac / iPhone 实际导航验证见 [Xcode 工程说明](../../apps/xcode/README.md)。
+2026-10-28：9 项状态测试通过，覆盖读取失败重试、保存／编辑／删除与汇总、失败保持数据、写入成功后刷新失败、防重复提交、账本选择、旧刷新取消，以及日／月筛选、刷新保留月份和保存后记录可见性。
 
-工具版本为 Swift tools 6.0 / Swift 6。当前 Package 构建基线为 macOS 14 / iOS 17，用于工程验证；产品正式最低支持版本仍待确定。首版仅面向 Mac / iPhone，iPadOS 暂不支持。
+端到端流程、独立测试账库与报告见 [Xcode 工程说明](../../apps/xcode/README.md)。
+
+## 辅助功能标识
+
+- 导航：`navigation.details`、`navigation.bills`、`navigation.books`、`navigation.settings`、`entry.add`。
+- 编辑：`editor.kind.expense`／`income`、`editor.amount`、`editor.categories`（分类滚动区）、`editor.category.<UUID>`、`editor.book`、`editor.date`、`editor.note`、`editor.keypad-return`、`editor.save`、`editor.cancel`、`editor.error`。
+- 数字键盘：`keypad.0` 至 `keypad.9`、`keypad..`、`keypad.+`、`keypad.-`、`keypad.delete`、`keypad.date`。
+- 日历：`month.previous`、`month.next`、`month.title`、`calendar.day.<day>`、`calendar.clear-selection`。
+- 详情：`entry.row.<UUID>`、`detail.amount`、`detail.note`、`entry.edit`、`entry.delete`、`entry.delete.confirm`、`detail.close`。票据按 `updatedAt` 重建，保持编辑后的辅助功能内容同步。
+- 账本／汇总：`ledger.book-picker`、`book.add`、`book.select.<UUID>`、`book.rename.<UUID>`、`book-editor.name`、`book-editor.save`、`summary.income`、`summary.expense`、`summary.balance`。
+
+Swift tools 6.0 / Swift 6；临时构建基线为 macOS 14 / iOS 17，正式最低支持版本仍待确定。仅面向 Mac / iPhone，iPadOS 暂不支持。
