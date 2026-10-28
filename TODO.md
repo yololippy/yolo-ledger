@@ -73,7 +73,7 @@ iCloud 同步不纳入首版里程碑；后续确定需要时再启动第 11.2 �
 - [x] 创建 `yolo-ledger-coordination` skill 和 Core、Storage、Apple 角色会话，验证 skill 格式、目录归属及只读就绪状态。
 - [x] 用户确认协作分工，并授权由 main 派发开发任务（2026-10-28）。
 - [x] main 派发并集成 M1 双端工程骨架，按第 2.1 节记录实际验证结果。
-- [x] 将“先给拆分结论、确认后按模块和依赖顺序提交”的用户约定写入 AGENTS，并由协作 skill 引用；当前已确认的提交方案直接执行。
+- [x] 将通用提交约定迁移至用户级 `commit-workflow` skill，移除仓库 AGENTS 中的重复流程；协作 skill 保留调用入口和本仓库的 Git 操作归属。
 - [x] 按确认方案将 M1 分为 Core、Storage、UI、Apps、总览文档五个提交，并核对各组文件范围。
 
 ## 1. 参考材料与开发方案
@@ -253,5 +253,6 @@ iCloud 同步不纳入首版里程碑；后续确定需要时再启动第 11.2 �
 | 2026-10-28 | 建立并验证 UI Package | `YoloLedgerUI` 仅依赖 Core，独立构建及账本加载状态测试通过；main 继续审阅导航取消与重入，双端工程验收另行记录 |
 | 2026-10-28 | 完成 M1 双端工程集成与导航验收 | 双端构建通过；4 个 UI 状态测试通过并覆盖快速取消重入；iPhone 模拟器四页导航 XCTest 通过；Mac App 启动与 native computer-use 四页实际点击通过。Mac XCTest runner 初始化超时单独记录，未宣称自动测试或真机验收通过；README 已提供运行步骤 |
 | 2026-10-28 | 按确认方案拆分 M1 提交并固化后续 Git 流程 | Core `f08af9d`、Storage `7ec18b1`、UI `9b7841f`、Apps `5f55b5e` 分别提交；总览文档与规则随本条记录提交。各组按明确路径暂存并检查差异；AGENTS 记录先给拆分结论、获准后依次提交的约定，协作 skill 引用同一规则 |
+| 2026-10-28 | 将通用提交流程迁移为全局 skill | 已创建 `~/.agents/skills/commit-workflow/SKILL.md` 与技能显示元数据，保留默认隐式调用；全局 skill 和仓库协作 skill 格式校验通过。已移除仓库 AGENTS 中的通用流程，并将协作入口改为 `$commit-workflow`，不固定仓库目录或提交数量 |
 
 后续每完成并验证一项任务，在对应任务处打勾，并在此表追加记录。新增记录使用实际完成日期。
