@@ -24,11 +24,11 @@
 ## 当前状态
 
 - 创建日期：2026-10-28。
-- 当前阶段：用户已确认协作分工，启动 M1 双端工程骨架；具体功能方案继续按后续里程碑整理。
+- 当前阶段：M1 双端工程骨架已实现并完成构建、启动与导航验收；下一里程碑为 M2 本地手动记账闭环。
 - 已确认一个仓库维护 macOS 和 iOS 两个原生 App，采用 Swift / SwiftUI，并按 `apps/` 与 `packages/` 分层；`apps/` 下直接放平台目录。
 - 已创建 `apps/{macos,ios,xcode}/`、`packages/{core-swift,storage-swift,ui-swift}/` 和 `docs/`，补充根目录 `AGENTS.md`、`README.md` 及各目录说明。
-- 当前尚无 Xcode 工程、Swift Package manifest 或功能代码，暂时没有可运行的 App。
-- 已创建 [开发协作 skill](.agents/skills/yolo-ledger-coordination/SKILL.md) 和 Core、Storage、Apple 三个同目录会话，均已只读确认职责；用户于 2026-10-28 确认由 main 派发开发任务，当前启动 M1。
+- 三个共享包、统一 Xcode 工程及 Mac / iPhone App 入口已创建。三包与双端 App 构建通过，Mac 实际点击与 iPhone 模拟器自动化均验证四页导航可达；当前为占位界面，尚无账目保存。
+- 已创建 [开发协作 skill](.agents/skills/yolo-ledger-coordination/SKILL.md) 和 Core、Storage、Apple 三个同目录会话；用户于 2026-10-28 确认分工，main 已派发并集成 M1 开发结果。
 - 已检索喵喵记账的公开页面和定时记账操作线索，链接及适用范围见第 9 节；最新版实际操作截图、录屏尚未归档，具体行为按参考版本核实。
 
 ## 已确认技术方向与待确认方案
@@ -42,7 +42,7 @@
 - 接口细化：暂缓本次 review 提出的模型转换、变更通知和错误传播等专项设计，保留现有模块依赖边界，后续随相关功能实现再细化。
 - 自动识别：使用 **Vision** 进行本地截图文字识别，再解析和匹配记账信息。
 - 快捷指令：使用 **App Intents** 提供记账动作。
-- Swift / SwiftUI、目录分层、首版本地存储及本地时区方向已确认；最低系统版本、本地持久化和识别的具体实现仍待确定，iCloud 留待后续按需评估。当前只完成目录和文档，尚未创建工程或编写功能代码。
+- Swift / SwiftUI、目录分层、首版本地存储及本地时区方向已确认；最低系统版本、本地持久化和识别的具体实现仍待确定，iCloud 留待后续按需评估。M1 临时构建基线使用 macOS 14 / iOS 17、Swift 6；这不是已确认的产品最低支持范围，实际兼容性验收另行记录。
 
 ## 开发里程碑
 
@@ -72,7 +72,9 @@ iCloud 同步不纳入首版里程碑；后续确定需要时再启动第 11.2 �
 - [x] 提交并推送本地优先方案、里程碑及 Mac / iPhone 范围文档（`4bafdb8`），核对远端 main 与本地提交一致。
 - [x] 创建 `yolo-ledger-coordination` skill 和 Core、Storage、Apple 角色会话，验证 skill 格式、目录归属及只读就绪状态。
 - [x] 用户确认协作分工，并授权由 main 派发开发任务（2026-10-28）。
-- [ ] main 派发并集成 M1 双端工程骨架，按第 2.1 节记录实际验证结果。
+- [x] main 派发并集成 M1 双端工程骨架，按第 2.1 节记录实际验证结果。
+- [x] 将“先给拆分结论、确认后按模块和依赖顺序提交”的用户约定写入 AGENTS，并由协作 skill 引用；当前已确认的提交方案直接执行。
+- [x] 按确认方案将 M1 分为 Core、Storage、UI、Apps、总览文档五个提交，并核对各组文件范围。
 
 ## 1. 参考材料与开发方案
 
@@ -95,16 +97,18 @@ iCloud 同步不纳入首版里程碑；后续确定需要时再启动第 11.2 �
 
 ### 2.1 M1：共享模块与双端工程
 
-进度：目录与职责说明已建立；工程、Package manifests 和 App 入口尚未创建。
+进度：M1 已完成。三包独立构建通过，双端 App 构建与启动通过，四页导航已在两端实际验证。Core 提供最小账本读取契约，Storage 仅提供空列表适配器，M1 不包含实际保存或业务 CRUD。使用本机 Xcode 27.1，命令通过 `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer` 指定，不修改系统全局开发工具选择。
 
-- [ ] 创建 `core-swift` 的 Package manifest 和源文件结构，独立构建通过。
-- [ ] 创建 `storage-swift`，引用 `core-swift` 并构建通过。
-- [ ] 创建 `ui-swift`，引用 `core-swift` 并构建通过。
-- [ ] 创建统一 `YoloLedger.xcodeproj`，配置本地 Package 引用、双端 targets 和共享 schemes；iOS target 仅面向 iPhone。
-- [ ] 创建 Mac App 入口，完成 macOS 构建与启动验证。
-- [ ] 创建 iOS App 入口，完成 iOS Simulator 构建与 iPhone 模拟器启动验证。
-- [ ] 建立账单、明细、账本、设置的页面占位，验证双端导航可达。
-- [ ] 更新 README，记录可复现的双端构建运行命令和验证结果。
+验证边界：共享 UI 的 4 个状态测试通过（包含失败重试与取消后重入）；iOS 27.0 / iPhone 18 Pro 模拟器的导航 XCTest 通过。Mac XCTest runner 因 automation mode 初始化超时未能运行用例，main 改用 native computer-use 实际点击“明细 → 账本 → 设置 → 账单”，核对各页标题、选中状态与内容，完成导航验收。真机与旧系统兼容性尚未验证。
+
+- [x] 创建 `core-swift` 的 Package manifest 和源文件结构，独立构建通过。
+- [x] 创建 `storage-swift`，引用 `core-swift` 并构建通过。
+- [x] 创建 `ui-swift`，引用 `core-swift` 并构建通过。
+- [x] 创建统一 `YoloLedger.xcodeproj`，配置本地 Package 引用、双端 targets 和共享 schemes；iOS target 仅面向 iPhone。
+- [x] 创建 Mac App 入口，完成 macOS 构建与启动验证。
+- [x] 创建 iOS App 入口，完成 iOS Simulator 构建与 iPhone 模拟器启动验证。
+- [x] 建立账单、明细、账本、设置的页面占位，验证双端导航可达。
+- [x] 更新 README，记录可复现的双端构建运行命令和验证结果。
 
 ### 2.2 M2：本地数据基础
 
@@ -243,5 +247,11 @@ iCloud 同步不纳入首版里程碑；后续确定需要时再启动第 11.2 �
 | 2026-10-28 | 更新平台范围并记录本地 Mac 环境 | iPadOS 暂不支持，当前范围为 Mac / iPhone；本机命令核实 Mac mini（Mac18,5）、Apple M6、24 GB、arm64、macOS 27.0.1（26A434）；已检查平台文档和验收范围一致、15 个本地链接有效，最低支持版本仍待确定 |
 | 2026-10-28 | 提交并推送已确认的文档调整 | 提交 `4bafdb8` 已推送至 origin/main，远端提交 ID 核对一致 |
 | 2026-10-28 | 创建开发协作 skill 和三个角色会话 | skill 格式校验通过；Core、Storage、Apple 的工作目录均为本仓库，已只读确认就绪；main 统一派活与集成，开发尚未启动，分工等待用户确认 |
+| 2026-10-28 | 提交协作配置并启动 M1 分工 | 协作配置提交为 `08e83dd`；用户确认后 main 已向 Core、Storage、Apple 分派开发任务，沿用同一仓库和目录归属 |
+| 2026-10-28 | 建立并验证 Core Package | `YoloLedgerCore` 提供 `LedgerBook` 与 `LedgerBookRepository`，独立 `swift build` 通过；仅建立账本读取契约，尚无记账计算或持久化 |
+| 2026-10-28 | 建立并验证 Storage Package | `YoloLedgerStorage` 依赖本地 Core，使用 Xcode 27.1 独立构建通过；`EmptyLedgerBookRepository` 仅返回空数组，未实现本地保存 |
+| 2026-10-28 | 建立并验证 UI Package | `YoloLedgerUI` 仅依赖 Core，独立构建及账本加载状态测试通过；main 继续审阅导航取消与重入，双端工程验收另行记录 |
+| 2026-10-28 | 完成 M1 双端工程集成与导航验收 | 双端构建通过；4 个 UI 状态测试通过并覆盖快速取消重入；iPhone 模拟器四页导航 XCTest 通过；Mac App 启动与 native computer-use 四页实际点击通过。Mac XCTest runner 初始化超时单独记录，未宣称自动测试或真机验收通过；README 已提供运行步骤 |
+| 2026-10-28 | 按确认方案拆分 M1 提交并固化后续 Git 流程 | Core `f08af9d`、Storage `7ec18b1`、UI `9b7841f`、Apps `5f55b5e` 分别提交；总览文档与规则随本条记录提交。各组按明确路径暂存并检查差异；AGENTS 记录先给拆分结论、获准后依次提交的约定，协作 skill 引用同一规则 |
 
 后续每完成并验证一项任务，在对应任务处打勾，并在此表追加记录。新增记录使用实际完成日期。
