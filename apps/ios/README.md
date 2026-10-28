@@ -1,6 +1,6 @@
 # iOS App
 
-用于有落 iPhone / iPad App 的入口、移动端导航和平台能力适配。后续快捷指令、截图识别等系统能力按确认的方案接入。
+用于有落 iPhone App 的入口、移动端导航和平台能力适配，iPadOS 暂不支持。后续快捷指令、截图识别等系统能力按确认的方案接入。
 
 后续由 `apps/xcode/` 中的 iOS target 构建，入口负责组装 `core-swift`、`storage-swift` 和 `ui-swift`。页面与交互依据喵喵记账的参考材料实现。
 

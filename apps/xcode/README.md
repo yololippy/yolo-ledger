@@ -5,6 +5,7 @@
 后续规划：
 
 - 创建 `YoloLedger.xcodeproj`，包含 macOS 与 iOS 两个原生 App targets 及对应的共享 schemes。
+- iOS target 仅面向 iPhone，iPadOS 暂不支持。
 - 分别引用 `../macos/` 和 `../ios/` 下的平台入口。
 - 引用 `../../packages/core-swift`、`../../packages/storage-swift` 和 `../../packages/ui-swift` 本地 Swift Packages。
 - 在此管理双端构建配置、资源和签名配置。
