@@ -55,5 +55,6 @@ yolo-ledger/
 - [双端应用目录](apps/README.md)
 - [共享模块目录](packages/README.md)
 - [项目文档目录](docs/README.md)
+- [main 与子 Agent 协作 skill](.agents/skills/yolo-ledger-coordination/SKILL.md)
 
 开发按五个里程碑推进：M1 双端工程骨架 → M2 本地手动记账闭环 → M3 账目管理与统计 → M4 定时记账与本地备份 → M5 快捷指令与首版验收。具体任务和验收标准见 [TODO](TODO.md)。构建命令在工程建立并验证后补充。

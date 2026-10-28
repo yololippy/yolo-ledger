@@ -1,0 +1,3 @@
+interface:
+  display_name: "有落开发协作"
+  short_description: "由 main 协调 Core、Storage、Apple 会话分工与集成验收"
