@@ -12,6 +12,7 @@ let package = Package(
     ],
     targets: [
         .target(name: "YoloLedgerCore"),
+        .testTarget(name: "YoloLedgerCoreTests", dependencies: ["YoloLedgerCore"]),
     ],
     swiftLanguageModes: [.v6]
 )
