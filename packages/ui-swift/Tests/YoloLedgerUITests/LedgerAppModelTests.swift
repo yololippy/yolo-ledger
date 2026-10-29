@@ -198,6 +198,19 @@ struct LedgerAppModelTests {
     }
 
     @Test
+    func selectingMonthNormalizesToMonthStartAndClearsDayFilter() throws {
+        let model = LedgerAppModel(repository: TestLedgerRepository())
+        let calendar = Calendar.current
+        let target = calendar.date(from: DateComponents(year: 2024, month: 2, day: 20, hour: 18))!
+        model.selectDay(Date())
+        model.selectMonth(target)
+
+        let expected = try LedgerDateRanges.range(for: .month, containing: target).start
+        #expect(model.displayedMonth == expected)
+        #expect(model.selectedDay == nil)
+    }
+
+    @Test
     func savingFromAnotherMonthOrDayMakesTheSavedRecordVisible() async throws {
         let model = LedgerAppModel(repository: TestLedgerRepository())
         await model.refresh()

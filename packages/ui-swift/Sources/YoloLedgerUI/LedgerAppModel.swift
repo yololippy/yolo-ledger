@@ -47,8 +47,12 @@ final class LedgerAppModel {
     }
 
     func moveMonth(by offset: Int) {
-        guard let date = Calendar.current.date(byAdding: .month, value: offset, to: displayedMonth),
-              let range = try? LedgerDateRanges.range(for: .month, containing: date) else { return }
+        guard let date = Calendar.current.date(byAdding: .month, value: offset, to: displayedMonth) else { return }
+        selectMonth(date)
+    }
+
+    func selectMonth(_ date: Date) {
+        guard let range = try? LedgerDateRanges.range(for: .month, containing: date) else { return }
         displayedMonth = range.start
         selectedDay = nil
     }

@@ -92,3 +92,10 @@ M2 重做前的验证保留于 [M2 验收记录](../../docs/m2-validation.md)及
 - 最终 Mac 构建通过，日志 `/tmp/yolo-ledger-categories-macos-final-build.log`，产物 `/tmp/yolo-ledger-categories-macos/Build/Products/Debug/YoloLedgerMac.app`。iPhone 产物 `/tmp/yolo-ledger-categories-ios/Build/Products/Debug-iphonesimulator/YoloLedgerIOS.app`。
 
 本轮 Apple 侧未操作 Mac UI、未新增真机验收；已有库种子升级由 Storage 模块单独验证。
+
+## 自研年月选择器验证（2026-10-28）
+
+- 账单与明细共用同一浏览月份状态；点击年月标题后，iPhone 使用去除无效拖拽区的紧凑 Sheet，Mac 使用标题锚定 Popover。
+- 月份以 3 × 4 网格选择；点击年份切换为每页 12 年的年份网格，可前后翻 12 年并通过“返回月份”返回。月份页支持左右按钮和横向滑动切换年份；高亮同时匹配选中年份；“回到本月”保持面板打开。iPhone 禁用系统拖拽关闭，避免横滑的纵向偏移误关面板，并提供明确关闭按钮。实现未引入第三方日历依赖或代码。
+- 共享 UI 10 项状态测试通过；iPhone 专项 UI 测试验证月份／年份面板、带纵向偏移的左右滑动不关闭、跨年高亮、回到本月不关闭、年份返回、明确关闭、选择目标年月及账单／明细同步更新。
+- iPhone 模拟器专项测试结果：`/tmp/yolo-ledger-month-picker-dismiss-fix-simulator.xcresult`；三张测试截图已实际核对紧凑布局、关闭按钮、跨年无高亮和年份返回按钮。

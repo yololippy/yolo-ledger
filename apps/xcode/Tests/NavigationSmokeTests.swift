@@ -39,6 +39,70 @@ final class NavigationSmokeTests: XCTestCase {
     }
 
     #if os(iOS)
+    func testMonthPickerBrowsesYearsAndUpdatesBothViews() throws {
+        let app = makeApplication()
+        app.launch()
+        let calendar = Calendar.current
+        let currentYear = calendar.component(.year, from: Date())
+        let currentMonth = calendar.component(.month, from: Date())
+        let monthTitle = app.buttons["month.title"]
+        XCTAssertTrue(monthTitle.waitForExistence(timeout: 15))
+        monthTitle.tap()
+
+        XCTAssertTrue(app.buttons["month-picker.year-toggle"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["month-picker.close"].exists)
+        XCTAssertTrue(app.buttons["month-picker.month.\(currentMonth)"].isSelected)
+        attachScreenshot(app, name: "month-picker-months")
+
+        let monthGrid = app.descendants(matching: .any)["month-picker.month-grid"].firstMatch
+        XCTAssertTrue(monthGrid.waitForExistence(timeout: 5))
+        let diagonalStart = monthGrid.coordinate(withNormalizedOffset: CGVector(dx: 0.82, dy: 0.35))
+        let diagonalEnd = monthGrid.coordinate(withNormalizedOffset: CGVector(dx: 0.18, dy: 0.55))
+        diagonalStart.press(forDuration: 0.1, thenDragTo: diagonalEnd)
+        XCTAssertTrue(app.buttons["month-picker.close"].exists)
+        XCTAssertTrue(app.buttons["month-picker.year-toggle"].label.contains(String(currentYear + 1)))
+        XCTAssertFalse(app.buttons["month-picker.month.\(currentMonth)"].isSelected)
+        attachScreenshot(app, name: "month-picker-other-year-no-highlight")
+        monthGrid.swipeRight()
+        XCTAssertTrue(app.buttons["month-picker.year-toggle"].label.contains(String(currentYear)))
+        XCTAssertTrue(app.buttons["month-picker.month.\(currentMonth)"].isSelected)
+        monthGrid.swipeLeft()
+
+        app.buttons["month-picker.current"].tap()
+        XCTAssertTrue(app.buttons["month-picker.year-toggle"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["month-picker.year-toggle"].label.contains(String(currentYear)))
+        XCTAssertTrue(app.buttons["month-picker.month.\(currentMonth)"].isSelected)
+
+        app.buttons["month-picker.year-toggle"].tap()
+        XCTAssertTrue(app.staticTexts["month-picker.year-range"].waitForExistence(timeout: 5))
+        attachScreenshot(app, name: "month-picker-years")
+        app.buttons["month-picker.back-to-months"].tap()
+        XCTAssertTrue(app.buttons["month-picker.year-toggle"].waitForExistence(timeout: 5))
+        app.buttons["month-picker.year-toggle"].tap()
+
+        let previousPageLastYear = currentYear - currentYear % 10 - 1
+        app.buttons["month-picker.range.previous"].tap()
+        let targetYear = app.buttons["month-picker.year.\(previousPageLastYear)"]
+        XCTAssertTrue(targetYear.waitForExistence(timeout: 5))
+        targetYear.tap()
+        XCTAssertTrue(app.buttons["month-picker.month.1"].waitForExistence(timeout: 5))
+        app.buttons["month-picker.month.1"].tap()
+
+        XCTAssertTrue(monthTitle.waitForExistence(timeout: 5))
+        XCTAssertTrue((monthTitle.value as? String)?.contains(String(previousPageLastYear)) == true)
+        XCTAssertTrue((monthTitle.value as? String)?.contains("1月") == true)
+
+        navigate(app, destination: "details", title: "明细")
+        let detailMonthTitle = app.buttons["month.title"]
+        XCTAssertTrue(detailMonthTitle.waitForExistence(timeout: 5))
+        XCTAssertTrue((detailMonthTitle.value as? String)?.contains(String(previousPageLastYear)) == true)
+        XCTAssertTrue((detailMonthTitle.value as? String)?.contains("1月") == true)
+        detailMonthTitle.tap()
+        XCTAssertTrue(app.buttons["month-picker.close"].waitForExistence(timeout: 5))
+        app.buttons["month-picker.close"].tap()
+        XCTAssertFalse(app.buttons["month-picker.close"].waitForExistence(timeout: 1))
+    }
+
     func testScreenshotCategoriesAreSelectableIncludingLastRowAndIncome() throws {
         let app = makeApplication()
         app.launch()

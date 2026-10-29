@@ -202,7 +202,7 @@ private struct LedgerEntriesView: View {
         HStack {
             Button { model.moveMonth(by: -1) } label: { Image(systemName: "chevron.left").frame(width: 32,height: 32) }.accessibilityIdentifier("month.previous")
             Spacer()
-            Text(model.displayedMonth, format: .dateTime.year().month()).font(.system(size: 19, weight: .bold)).accessibilityIdentifier("month.title")
+            MonthPickerButton(displayedMonth: model.displayedMonth) { model.selectMonth($0) }
             Spacer()
             Button { model.moveMonth(by: 1) } label: { Image(systemName: "chevron.right").frame(width: 32,height: 32) }.accessibilityIdentifier("month.next")
         }.buttonStyle(.plain)
@@ -278,7 +278,7 @@ private struct LedgerCalendarView: View {
             HStack {
                 Button { model.moveMonth(by: -1) } label: { Image(systemName: "chevron.left").frame(width: 30,height: 30) }.accessibilityIdentifier("month.previous")
                 Spacer()
-                Text(model.displayedMonth, format: .dateTime.year().month()).font(.system(size: 16,weight: .bold)).accessibilityIdentifier("month.title")
+                MonthPickerButton(displayedMonth: model.displayedMonth) { model.selectMonth($0) }
                 Spacer()
                 Button { model.moveMonth(by: 1) } label: { Image(systemName: "chevron.right").frame(width: 30,height: 30) }.accessibilityIdentifier("month.next")
             }.buttonStyle(.plain)
