@@ -30,7 +30,8 @@ flowchart TD
 - 仓库验证账本、分类存在和分类方向一致后再写入。保存显式落盘；失败回滚未保存变更并向调用方抛出错误。初始化使用独立标记，只执行一次，不覆盖已有名称。
 - App 使用 `SwiftDataLedgerRepository.defaultStoreURL()`，默认位于本机应用容器的 `Application Support/YoloLedger/ledger.store`。Mac 与 iPhone 数据独立，无云端账户或同步依赖。
 - SwiftData 通过串行 ModelActor 隔离数据库上下文；跨模块传递可发送的值对象。每个活动账库使用一个长期仓库实例。
-- 当前建立 V1 `VersionedSchema` 和迁移计划入口；尚无 V2，也未声称完成跨版本升级验收。后续修改 schema 需补迁移与旧数据验证，不能以删除数据库代替迁移。
+- 当前建立 V1 `VersionedSchema` 和迁移计划入口。首次以不同 schema 版本打开已有数据库前，先保存 SQLite 主文件、WAL 和 SHM 的一次性升级快照；成功后再更新版本标记。后续修改 schema 需保留旧 schema、补迁移与旧数据验证，不能以删除数据库代替迁移。
+- iPhone target 默认启用 `NSFileProtectionComplete`，存储层也显式提升既有账库及升级快照；锁屏时本地账目文件不可读写。Mac 侧依赖 App Sandbox、系统账户权限与 FileVault，不将 iOS 文件保护类错误等同于 Mac 加密。
 
 日期、范围和统计跟随设备当前系统本地时区。日期范围采用包含起点、不含终点的区间，避免边界账目重复计入；日、周、月、年由 Calendar 计算。精确统计与最终交互的完成情况见 TODO。
 

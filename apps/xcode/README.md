@@ -15,6 +15,8 @@
 
 `Support/LedgerAppBootstrap.swift` 同时编入两个 App，长期持有 `SwiftDataLedgerRepository` 并注入共享 UI。默认位置为各 App 容器的 `Application Support/YoloLedger/ledger.store`。打开失败显示错误和重试，不回退内存、不清库、不调用 fatalError。当前仅本地保存，未接入 iCloud。
 
+iPhone target 通过 `Configuration/YoloLedgerIOS.entitlements` 将默认数据保护设为 `NSFileProtectionComplete`，存储层同时处理既有数据库文件。Bundle ID 和 `Application Support` 相对路径保持稳定；SwiftData 以版本化 schema 打开，版本变化前先创建不覆盖的本地升级快照。
+
 当前已有本地新增收支、编辑、确认删除、基本账本管理、月收支汇总与日历筛选。UI 按[喵喵记账参考材料](../../docs/references/meow-ledger/README.md)重做为纸张、描边、圆形分类、黄色数字键盘和票据样式；未展示的参考页面按同一视觉组件适配。功能与状态见 [UI 模块](../../packages/ui-swift/README.md)。
 
 工具 Xcode 27.1（27A9275）、Swift 6。临时构建基线 macOS 14 / iOS 17，正式最低支持范围待确定。Mac 与模拟器使用本地 ad-hoc 签名，无个人团队或证书；真机另行配置与验收。
@@ -53,6 +55,8 @@ open -n /tmp/yolo-ledger-meow-macos/Build/Products/Debug/YoloLedgerMac.app \
 ## iPhone 流程测试
 
 `Tests/NavigationSmokeTests.swift` 每个用例生成独立 UUID，重启使用同一 UUID。覆盖导航和取消、真实日期／账本选项、账本新建／重命名／切换、收入、非法金额保持输入、精确加减保存、日历日／月筛选、编辑、重启保留、确认删除及删除后再次重启、启动失败重试。
+
+覆盖安装专项用例 `testUpdateInstallationPreservesExistingFixture` 默认跳过，只在两阶段升级验收时通过 xctestrun 注入 `YOLO_LEDGER_UPDATE_TEST_MODE=seed|verify` 和同一个测试账库 UUID。先用旧 build 写入固定金额和备注，再用相同 Bundle ID 的新 build 覆盖安装并只读核对；不能用卸载重装代替覆盖安装。
 
 本轮设备为 iPhone 18 Pro / iOS 27.0：`2AEB6FA7-B4E7-4A91-86EE-2C942F44F395`。
 

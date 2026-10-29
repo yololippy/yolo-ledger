@@ -72,4 +72,65 @@ struct LocalLedgerStoreTests {
         #expect(records.first?.id == id)
         #expect(records.first?.name == "磁盘账本")
     }
+
+    @Test @MainActor func existingStoreIsSnapshottedOnceBeforeSchemaUpgrade() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("YoloLedgerStorageTests-\(UUID())", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let storeURL = directory.appendingPathComponent("ledger.store")
+        let id = UUID()
+
+        do {
+            let container = try LocalLedgerStore.makeContainer(at: storeURL)
+            let context = ModelContext(container)
+            context.autosaveEnabled = false
+            context.insert(LedgerSchemaV1.BookRecord(id: id, name: "升级前账本", sortOrder: 0))
+            try context.save()
+        }
+
+        let markerURL = StoreUpgradeSnapshot.schemaMarkerURL(for: storeURL)
+        try Data("0.9.0\n".utf8).write(to: markerURL, options: .atomic)
+        _ = try LocalLedgerStore.makeContainer(at: storeURL)
+
+        let snapshotURL = StoreUpgradeSnapshot.snapshotStoreURL(
+            for: storeURL,
+            targetSchemaVersion: LocalLedgerStore.currentSchemaVersion
+        )
+        #expect(FileManager.default.fileExists(atPath: snapshotURL.path))
+        #expect(try String(contentsOf: markerURL, encoding: .utf8) == "1.0.0\n")
+        #expect(try fetchBooks(from: snapshotURL).map(\.name) == ["升级前账本"])
+
+        do {
+            let container = try LocalLedgerStore.makeContainer(at: storeURL)
+            let context = ModelContext(container)
+            let book = try #require(context.fetch(FetchDescriptor<LedgerSchemaV1.BookRecord>()).first)
+            book.name = "升级后账本"
+            try context.save()
+        }
+        try Data("0.9.0\n".utf8).write(to: markerURL, options: .atomic)
+        _ = try LocalLedgerStore.makeContainer(at: storeURL)
+
+        #expect(try fetchBooks(from: snapshotURL).map(\.name) == ["升级前账本"])
+        let current = try LocalLedgerStore.makeContainer(at: storeURL)
+        let currentBooks = try ModelContext(current).fetch(FetchDescriptor<LedgerSchemaV1.BookRecord>())
+        #expect(currentBooks.map(\.name) == ["升级后账本"])
+    }
+}
+
+@MainActor
+private func fetchBooks(from storeURL: URL) throws -> [LedgerSchemaV1.BookRecord] {
+    let schema = Schema(versionedSchema: LedgerSchemaV1.self)
+    let configuration = ModelConfiguration(
+        "UpgradeSnapshotVerification",
+        schema: schema,
+        url: storeURL,
+        allowsSave: false,
+        cloudKitDatabase: .none
+    )
+    let container = try ModelContainer(
+        for: schema,
+        migrationPlan: LedgerMigrationPlan.self,
+        configurations: [configuration]
+    )
+    return try ModelContext(container).fetch(FetchDescriptor<LedgerSchemaV1.BookRecord>())
 }

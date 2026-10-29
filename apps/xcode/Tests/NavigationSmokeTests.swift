@@ -301,6 +301,48 @@ final class NavigationSmokeTests: XCTestCase {
         XCTAssertTrue(app.buttons["entry.add"].waitForExistence(timeout: 15))
     }
 
+    func testUpdateInstallationPreservesExistingFixture() throws {
+        let environment = ProcessInfo.processInfo.environment
+        guard
+            let mode = environment["YOLO_LEDGER_UPDATE_TEST_MODE"],
+            let storeID = environment["YOLO_LEDGER_UPDATE_TEST_STORE_ID"],
+            UUID(uuidString: storeID) != nil
+        else {
+            throw XCTSkip("仅由覆盖安装的 seed / verify 两阶段测试启用")
+        }
+
+        let app = makeApplication(storeID: storeID)
+        app.launch()
+        XCTAssertTrue(app.buttons["entry.add"].waitForExistence(timeout: 15))
+        let note = "覆盖安装保留验证"
+        let fixture = entryButton(app, note: note)
+
+        switch mode {
+        case "seed":
+            if !fixture.exists {
+                app.buttons["entry.add"].tap()
+                XCTAssertTrue(app.buttons["keypad.8"].waitForExistence(timeout: 10))
+                typeAmount(app, expression: "88.66")
+                app.textFields["editor.note"].tap()
+                app.textFields["editor.note"].typeText(note)
+                app.buttons["editor.keypad-return"].tap()
+                app.buttons["editor.save"].tap()
+            }
+            XCTAssertTrue(fixture.waitForExistence(timeout: 10))
+            app.terminate()
+        case "verify":
+            XCTAssertTrue(fixture.waitForExistence(timeout: 15), "覆盖安装后未找到升级前账目")
+            XCTAssertTrue(app.staticTexts["summary.expense"].label.contains("88.66"))
+            fixture.tap()
+            XCTAssertTrue(app.staticTexts["detail.amount"].waitForExistence(timeout: 10))
+            XCTAssertTrue(app.staticTexts["detail.amount"].label.contains("88.66"))
+            XCTAssertTrue(app.staticTexts["detail.note"].label.contains(note))
+            attachScreenshot(app, name: "update-installation-preserved-entry")
+        default:
+            XCTFail("未知覆盖安装测试阶段：\(mode)")
+        }
+    }
+
     private func typeAmount(_ app: XCUIApplication, expression: String, clearing: Int = 0) {
         for _ in 0..<clearing { app.buttons["keypad.delete"].tap() }
         for character in expression { app.buttons["keypad.\(character)"].tap() }
@@ -321,8 +363,12 @@ final class NavigationSmokeTests: XCTestCase {
     #endif
 
     private func makeApplication() -> XCUIApplication {
+        makeApplication(storeID: UUID().uuidString)
+    }
+
+    private func makeApplication(storeID: String) -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchArguments = ["--ui-test-store", UUID().uuidString]
+        app.launchArguments = ["--ui-test-store", storeID]
         return app
     }
 

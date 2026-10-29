@@ -370,6 +370,7 @@
 		"E7903DE9D339721EDA1CA913" = {
 			"isa" = "XCBuildConfiguration";
 			"buildSettings" = {
+				"CODE_SIGN_ENTITLEMENTS" = "Configuration/YoloLedgerIOS.entitlements";
 				"CODE_SIGN_STYLE" = "Automatic";
 				"CURRENT_PROJECT_VERSION" = "1";
 				"MARKETING_VERSION" = "0.1.0";
@@ -392,6 +393,7 @@
 		"C35E517F113B3BE8B646CD4E" = {
 			"isa" = "XCBuildConfiguration";
 			"buildSettings" = {
+				"CODE_SIGN_ENTITLEMENTS" = "Configuration/YoloLedgerIOS.entitlements";
 				"CODE_SIGN_STYLE" = "Automatic";
 				"CURRENT_PROJECT_VERSION" = "1";
 				"MARKETING_VERSION" = "0.1.0";

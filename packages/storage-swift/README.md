@@ -39,7 +39,15 @@ M1 的 `EmptyLedgerBookRepository` 继续保留，用于旧骨架和只需要 `L
 
 内部 `LedgerSchemaV1` 声明版本 `1.0.0`，包含账本、分类、账目和初始化标记。`LedgerMigrationPlan` 已登记 V1，当前没有跨版本迁移阶段。
 
-本轮验证的是 V1 新建、重开及同一 schema 下的分类种子数据升级，尚未验证未来 schema 版本迁移。当前唯一约束和引用设计服务于本地版，后续如接入 iCloud，需另行评估兼容性和迁移方案。
+每次成功打开账库后，会在数据库旁记录当前 schema 版本。已有数据库首次由新 schema 打开前，存储层先把 SQLite 主文件、WAL 和 SHM 一起复制到同目录 `UpgradeSnapshots/before-<目标版本>/`；同一目标版本的快照只创建一次，失败或重试不会覆盖最初快照。快照完成前不启动 SwiftData 迁移，迁移失败不清库。今后新增 schema 时必须同时更新当前版本、保留旧 `VersionedSchema`、补迁移阶段和旧版本数据测试。
+
+本轮验证的是 V1 新建、重开、升级前快照及同一 schema 下的分类种子数据升级；尚无 V2，因此不能把快照测试表述为已经完成真实 V1 → V2 迁移。当前唯一约束和引用设计服务于本地版，后续如接入 iCloud，需另行评估兼容性和迁移方案。
+
+## 本地数据保护
+
+iPhone target 声明系统默认数据保护级别 `NSFileProtectionComplete`。存储层还会显式把已有的账库目录、SQLite 主文件、WAL、SHM、schema 标记及升级快照提升到 Complete，避免旧安装继续沿用较弱的默认级别。该级别由 iOS 使用设备密钥自动完成磁盘加密，锁屏时文件不可读写；当前 App 没有锁屏后台写账能力。模拟器只能验证代码路径和 entitlement 生成，真实锁屏保护仍需在物理 iPhone 上做发布前安全验收。
+
+macOS 没有同一套 iOS 文件保护类；Mac 侧继续依赖 App Sandbox、系统账户权限与用户开启的 FileVault。上述升级快照逻辑同时用于 Mac 和 iPhone。
 
 ## 分类种子数据升级
 
@@ -64,7 +72,7 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift build --package-p
 DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test --package-path packages/storage-swift
 ```
 
-2026-10-28 使用 Xcode 27.1 完成 macOS arm64 构建和 **20 项测试**。测试使用各自独立的真实临时磁盘文件，覆盖种子幂等、账目新增／更新／删除后重开保留、精确大额金额、账本筛选与改名、并发重复 ID、无效输入、失败回滚，以及文件系统错误和损坏数据库不被清空。
+2026-10-29 使用 Xcode 27.1 完成 macOS arm64 构建和 **21 项测试**。测试使用各自独立的真实临时磁盘文件，覆盖种子幂等、账目新增／更新／删除后重开保留、精确大额金额、账本筛选与改名、并发重复 ID、无效输入、失败回滚、升级前快照只创建一次，以及文件系统错误和损坏数据库不被清空。
 
 其中 5 项分类升级测试先直接写入冻结的旧 8 分类、旧初始化标记、旧账目和改名账本，真实落盘后再打开仓库升级；覆盖新旧安装一致、自定义数据保留、重开无重复、只读保存失败回滚与重试，以及已升级库无需再保存。
 

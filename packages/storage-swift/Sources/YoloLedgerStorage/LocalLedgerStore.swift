@@ -16,13 +16,21 @@ public enum LedgerStorageError: Error, Equatable, Sendable, LocalizedError {
 }
 
 enum LocalLedgerStore {
+    static let currentSchemaVersion = "1.0.0"
+
     static func makeContainer(at storeURL: URL) throws -> ModelContainer {
         guard storeURL.isFileURL, !storeURL.hasDirectoryPath else {
             throw LedgerStorageError.invalidStoreURL
         }
+        let storeDirectory = storeURL.deletingLastPathComponent()
         try FileManager.default.createDirectory(
-            at: storeURL.deletingLastPathComponent(),
+            at: storeDirectory,
             withIntermediateDirectories: true
+        )
+        try LocalStoreDataProtection.protectDirectory(at: storeDirectory)
+        try StoreUpgradeSnapshot.prepareIfNeeded(
+            for: storeURL,
+            targetSchemaVersion: currentSchemaVersion
         )
         let schema = Schema(versionedSchema: LedgerSchemaV1.self)
         let configuration = ModelConfiguration(
@@ -32,10 +40,16 @@ enum LocalLedgerStore {
             allowsSave: true,
             cloudKitDatabase: .none
         )
-        return try ModelContainer(
+        let container = try ModelContainer(
             for: schema,
             migrationPlan: LedgerMigrationPlan.self,
             configurations: [configuration]
         )
+        try LocalStoreDataProtection.protectStoreFamily(at: storeURL)
+        try StoreUpgradeSnapshot.markSuccessfulOpen(
+            for: storeURL,
+            schemaVersion: currentSchemaVersion
+        )
+        return container
     }
 }
