@@ -10,7 +10,9 @@ M2 本地手动记账已接入：支持收入／支出新增、编辑、删除�
 
 当前页面仍是前一阶段的临时界面，功能与测试结果见 [历史 UI 验收](docs/ui-validation.md)。后续 UI 将使用有落自己的品牌和交互设计，不再以喵喵记账为设计参考。
 
-首版独立图标方向已选择：橙色“记录点”落入象牙色承接页，表达“每一笔，都有落点”；背景采用以 `#0A84FF` 为基准的亮系统蓝。当前方向尚未制作正式 AppIcon 像素资源。见 [品牌与图标](docs/brand/README.md)。
+iPhone 已接入“截图记账”快捷指令动作：接收系统截屏或选定图片，在设备端使用 Vision 识别金额、商户、时间、收支方向及基础分类建议，再打开有落确认页保存。当前不直接自动入账，不保存原始截图；配置方式与已知边界见 [快捷指令截图记账说明](docs/screenshot-shortcut.md)。
+
+首版独立图标已接入 iPhone 与 Mac：橙色“记录点”落入象牙色承接页，表达“每一笔，都有落点”；背景采用以 `#0A84FF` 为基准的亮系统蓝。见 [品牌与图标](docs/brand/README.md)。
 
 共享 UI 已采用全局语义主题：底部导航、记账键盘和详情背景统一为粉彩浅蓝 `#C6E2FF`，页面不再直接保存 RGB 色值。当前 `.pastel` 主题由双端统一注入，未来可在主题文件中增加暗黑或其他预设并集中切换。
 
@@ -67,6 +69,7 @@ yolo-ledger/
 - [项目文档目录](docs/README.md)
 - [工程边界与本地记账](docs/architecture.md)
 - [iCloud 同步与用户可见目录](docs/icloud-sync-plan.md)
+- [iOS 快捷指令截图记账](docs/screenshot-shortcut.md)
 - [M2 验收记录](docs/m2-validation.md)
 - [品牌与图标](docs/brand/README.md)
 - [历史 UI 截图与验收](docs/ui-validation.md)

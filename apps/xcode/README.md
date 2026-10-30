@@ -17,6 +17,8 @@
 
 两个 App Target 启用 CloudKit、iCloud Documents、推送与远程通知，并共享 `iCloud.com.yololedger.app`。首次成功访问 iCloud Documents 时创建 `Documents/关于有落.txt`，使“文件”App和 Finder 中出现用户可见的“有落”目录；运行中的 SwiftData 数据库不会写入该目录。
 
+`Resources/Assets.xcassets` 同时编入 iPhone 与 Mac Target，`AppIcon` 使用已选定的有落亮系统蓝图标；iOS 使用 1024 × 1024 master，macOS 使用同一源图生成的标准多尺寸资源。
+
 iPhone target 通过 `Configuration/YoloLedgerIOS.entitlements` 将默认数据保护设为 `NSFileProtectionComplete`，存储层同时处理既有数据库文件。Bundle ID 和 `Application Support` 相对路径保持稳定；SwiftData 以版本化 schema 打开，版本变化前先创建不覆盖的本地升级快照。
 
 当前已有本地新增收支、编辑、确认删除、基本账本管理、月收支汇总与日历筛选。UI 按[喵喵记账参考材料](../../docs/references/meow-ledger/README.md)重做为纸张、描边、圆形分类、黄色数字键盘和票据样式；未展示的参考页面按同一视觉组件适配。功能与状态见 [UI 模块](../../packages/ui-swift/README.md)。

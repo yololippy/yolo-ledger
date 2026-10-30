@@ -2,7 +2,7 @@
 
 Swift module / library：`YoloLedgerUI`，仅依赖本地 `YoloLedgerCore`。
 
-`YoloLedgerRootView(repository:)` 接受 `any LedgerRepository`，不直接引用 SwiftData。App 长期持有磁盘仓库，根页面的 `LedgerAppModel` 为所有入口提供同一套账本、分类和账目状态。
+`YoloLedgerRootView(repository:)` 接受 `any LedgerRepository`，不直接引用 SwiftData。iPhone 还可通过 `YoloLedgerRootView(repository:pendingScreenshotProposal:)` 注入快捷指令识别结果；根页面等待数据加载完成后打开记账确认页。App 长期持有磁盘仓库，根页面的 `LedgerAppModel` 为所有入口提供同一套账本、分类和账目状态。
 
 ## 界面与功能
 
@@ -21,9 +21,11 @@ Swift module / library：`YoloLedgerUI`，仅依赖本地 `YoloLedgerCore`。
 - 分类圆形按钮最大为 70 点，窄列随实际可用宽度等比缩小，维持四列，避免固定宽度挤出网格；切换收支类型时滚动位置回到顶部。
 - 数字键盘支持加减表达式，保存调用 Core 的 `LedgerAmountExpression.evaluate`；例如 `12.34+7.66-5` 保存为 `15.00`，非法表达式保留输入。
 - 账单按所选月份显示真实收支、结余、黄色支出／粉色收入条及日分组记录。
-- 明细提供真实月日历、前后月切换、每日结余、日期选择、当日收支及列表筛选；再次点击同一天或“查看整月”取消日期筛选。
+- 明细提供真实月日历、前后月切换、每日结余、日期选择、当日收支及列表筛选；选中某一天后点击中央加号，新账目默认使用该日期；再次点击同一天或“查看整月”取消日期筛选。
 - 账单与明细共用自研年月选择器：点击年月标题后，iPhone 显示紧凑 Sheet，Mac 显示标题锚定 Popover；月份使用 3 × 4 网格，点击年份可进入每页 12 年的快速选择。左右按钮或横向滑动切换年份；月份高亮同时匹配选中年份，切到其他年份不会保留旧月份高亮；“回到本月”只导航并保持面板打开。iPhone 禁用系统拖拽关闭以免横滑误关，使用右上角关闭按钮主动退出。未引入第三方日历代码。
 - 详情使用白色票据、虚线和锯齿底边，支持编辑与确认删除。账本支持新建、重命名、切换；“我的”展示离线、检查、同步、暂停或错误状态。
+- iPhone 快捷指令截图识别结果进入“确认截图记账”页面，预填金额、日期、商户备注和分类建议；用户确认保存后将来源记为 `.screenshotShortcut`。
+- iPhone“我的”页面提供“轻点两下，截图记账”三步设置指引和快捷指令跳转；系统的“轻点背面”绑定仍由用户在设置中完成。
 
 账本与“我的”未在参考截图中完整展示，按同一视觉组件适配现有功能，不声称精确还原未知页面。未增加预算、猫咪游戏、存钱等无对应实现的入口。完整分类管理、图表、导入导出和定时记账仍属于后续阶段；iCloud 的真实双设备验收单独跟踪。
 
@@ -50,7 +52,7 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test --package-pa
 ## 辅助功能标识
 
 - 导航：`navigation.details`、`navigation.bills`、`navigation.books`、`navigation.settings`、`entry.add`。
-- 编辑：`editor.kind.expense`／`income`、`editor.amount`、`editor.categories`（分类滚动区）、`editor.category.<UUID>`、`editor.book`、`editor.date`、`editor.note`、`editor.keypad-return`、`editor.save`、`editor.cancel`、`editor.error`。
+- 编辑：`editor.title`、`editor.screenshot-confirmation`、`editor.kind.expense`／`income`、`editor.amount`、`editor.categories`（分类滚动区）、`editor.category.<UUID>`、`editor.book`、`editor.date`、`editor.note`、`editor.keypad-return`、`editor.save`、`editor.cancel`、`editor.error`。
 - 数字键盘：`keypad.0` 至 `keypad.9`、`keypad..`、`keypad.+`、`keypad.-`、`keypad.delete`、`keypad.date`。
 - 日历：`month.previous`、`month.next`、`month.title`、`month-picker.year-toggle`、`month-picker.year.previous`、`month-picker.year.next`、`month-picker.range.previous`、`month-picker.range.next`、`month-picker.month.<1...12>`、`month-picker.year.<year>`、`month-picker.current`、`month-picker.back-to-months`、`month-picker.close`、`calendar.day.<day>`、`calendar.clear-selection`。
 - 详情：`entry.row.<UUID>`、`detail.amount`、`detail.note`、`entry.edit`、`entry.delete`、`entry.delete.confirm`、`detail.close`。票据按 `updatedAt` 重建，保持编辑后的辅助功能内容同步。

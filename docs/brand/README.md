@@ -10,11 +10,11 @@
 - 尺寸：1254 × 1254 px
 - Alpha：无
 - SHA-256：`51e87d2d8de6f499b2c9190a0a0165b2c3c9f6e38660ec2c4980753fa07ae24c`
-- 状态：方向已选择，尚未制作正式 AppIcon 像素资源或接入 Xcode
+- 状态：已生成 1024 × 1024 iOS master 与 16–1024 px macOS 图标资源，并接入两个 Xcode App Target
 
 这是一枚无文字的独立标志，不使用猫、爪印、票据锯齿、货币符号、计算器、图表，也不沿用此前黄粉描边的参考风格。系统负责为 iOS 与 macOS App 图标应用最终蒙版，因此源图保持不透明方形画布，不预先绘制外层圆角。
 
-旧图标草案及其他预览图片已按用户要求移除，仓库只保留当前选中的亮系统蓝 icon。正式 1024 × 1024 master、各平台资源及品牌衍生版本后续再生成。
+旧图标草案及其他预览图片已按用户要求移除，仓库只保留当前选中的亮系统蓝 icon。Xcode 资源位于 `apps/xcode/Resources/Assets.xcassets/AppIcon.appiconset/`；iOS 使用不透明 1024 × 1024 master，macOS 使用由同一源图缩放生成的标准尺寸。
 
 ## 生成说明
 
