@@ -137,6 +137,8 @@ iCloud 同步作为独立工作流在第 11.2 节跟踪；不阻塞仍可离线�
 - [x] 选择亮系统蓝图标方向，并将 `#0A84FF` 作为当前内部主色试用；共享 UI 9 项测试、iOS / macOS 构建及 iPhone 分类页面专项测试通过。
 - [x] 将底栏、记账键盘与详情背景统一为粉彩浅蓝 `#C6E2FF`；删除临时 Debug 调色器、状态与专项测试，并将所有共享 UI 色值收口到可注入的全局 `LedgerTheme`，为暗黑模式和主题切换预留入口；清理所有非最终 icon 图片及失效链接。
 - [x] 为账单与明细接入自研年月选择器：iPhone 紧凑 Sheet、Mac 锚定 Popover；支持月份网格、每页 12 年的年份快速选择、按钮及横向滑动切换年份、跨年高亮、保持面板打开的回到本月和年份返回；iPhone 禁用系统拖拽关闭并提供明确关闭按钮，两个页面共用浏览月份状态。
+- [x] 修复 iPhone 明细日历卡片顶部描边在初始滚动位置被裁切：卡片描边改为向内绘制，并增加滚动内容顶部留白。
+- [x] 将“明细”设为 Mac 与 iPhone App 启动后的默认首页，并更新导航回归测试。
 
 - [x] 根据已归档参考材料整理当前页面的颜色、字体、间距、图标、按钮和列表样式，见 [参考规格](docs/references/meow-ledger/README.md)。
 - [ ] 还原主要页面框架、导航栏、底部入口及页面跳转方式。
@@ -300,3 +302,5 @@ iCloud 同步作为独立工作流在第 11.2 节跟踪；不阻塞仍可离线�
 | 2026-10-29 | 修复年月选择器横滑误关闭 | iPhone Sheet 禁用系统拖拽关闭并增加明确关闭按钮；专项 UI 测试使用带纵向偏移的横向拖动验证跨年且面板保持打开，同时验证关闭按钮、跨年高亮、回到本月和年份返回；最新版已安装并启动于 iPhone 模拟器 |
 | 2026-10-29 | 建立本地数据保护与覆盖安装安全基线 | iPhone target 启用 `NSFileProtectionComplete`，存储层显式保护既有账库及升级快照；打开不同 schema 前保存一次且不覆盖的 SQLite 主文件／WAL／SHM 快照。Storage 21 项测试通过；iPhone 模拟器以相同 Bundle ID 从 build 1 覆盖安装 build 2，升级前 `88.66` 账目及备注完整保留；真机锁屏保护仍待发布前验收 |
 | 2026-10-30 | 接入 iCloud 自动同步代码与共享标识 | iPhone / Mac Bundle ID 统一为 `com.yololedger.app`，共享 `iCloud.com.yololedger.app`；SwiftData 模型完成 CloudKit 兼容调整，接入状态监听、远端刷新、软删除、UUID 去重和可见 Documents 初始化。Core 42、Storage 22、UI 10 项测试及 iPhone 模拟器导航冒烟通过，iOS 模拟器与 macOS Debug 构建通过；模拟器以正常 CloudKit 配置启动并打开本地账库。Developer Portal、Development Schema、真实双设备同步及目录可见性仍待验收 |
+| 2026-10-30 | 修复明细日历卡片顶部描边裁切 | 卡片描边改为向内绘制，滚动内容顶部留白由 2pt 增至 8pt；共享 UI 10 项测试、iOS Simulator 与 macOS Debug 构建及 iPhone 18 Pro 模拟器四页导航烟测通过，未下拉时截图确认顶部圆角边框完整可见 |
+| 2026-10-30 | 将明细设为默认首页 | Mac 与 iPhone 共用的根导航默认选中“明细”；导航与年月选择器测试同步调整。共享 UI 10 项测试、iOS Simulator 与 macOS Debug 构建通过，iPhone 18 Pro 模拟器启动及四页导航烟测确认首页为明细 |

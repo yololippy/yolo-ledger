@@ -10,19 +10,19 @@ final class NavigationSmokeTests: XCTestCase {
     func testFourDestinationsAreReachable() throws {
         let app = makeApplication()
         app.launch()
-        XCTAssertTrue(app.staticTexts["暂无账单"].waitForExistence(timeout: 15))
-        attachScreenshot(app, name: "01-bills")
-        navigate(app, destination: "details", title: "明细")
-        XCTAssertTrue(app.staticTexts["暂无明细"].waitForExistence(timeout: 10))
-        attachScreenshot(app, name: "02-details")
+        XCTAssertTrue(app.staticTexts["暂无明细"].waitForExistence(timeout: 15))
+        attachScreenshot(app, name: "01-details")
+        navigate(app, destination: "bills", title: "账单")
+        XCTAssertTrue(app.staticTexts["暂无账单"].waitForExistence(timeout: 10))
+        attachScreenshot(app, name: "02-bills")
         navigate(app, destination: "books", title: "账本")
         XCTAssertTrue(app.buttons["book.add"].waitForExistence(timeout: 10))
         attachScreenshot(app, name: "03-books")
         navigate(app, destination: "settings", title: "我的")
         XCTAssertTrue(app.staticTexts["settings.sync-status"].waitForExistence(timeout: 10))
         attachScreenshot(app, name: "04-settings")
-        navigate(app, destination: "bills", title: "账单")
-        XCTAssertTrue(app.staticTexts["暂无账单"].waitForExistence(timeout: 10))
+        navigate(app, destination: "details", title: "明细")
+        XCTAssertTrue(app.staticTexts["暂无明细"].waitForExistence(timeout: 10))
         #if os(iOS)
         app.buttons["entry.add"].tap()
         XCTAssertTrue(app.buttons["editor.cancel"].waitForExistence(timeout: 10))
@@ -34,7 +34,7 @@ final class NavigationSmokeTests: XCTestCase {
         XCTAssertTrue(bookOption.waitForExistence(timeout: 5))
         bookOption.tap()
         app.buttons["editor.cancel"].tap()
-        XCTAssertTrue(app.staticTexts["暂无账单"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["暂无明细"].waitForExistence(timeout: 10))
         #endif
     }
 
@@ -92,12 +92,12 @@ final class NavigationSmokeTests: XCTestCase {
         XCTAssertTrue((monthTitle.value as? String)?.contains(String(previousPageLastYear)) == true)
         XCTAssertTrue((monthTitle.value as? String)?.contains("1月") == true)
 
-        navigate(app, destination: "details", title: "明细")
-        let detailMonthTitle = app.buttons["month.title"]
-        XCTAssertTrue(detailMonthTitle.waitForExistence(timeout: 5))
-        XCTAssertTrue((detailMonthTitle.value as? String)?.contains(String(previousPageLastYear)) == true)
-        XCTAssertTrue((detailMonthTitle.value as? String)?.contains("1月") == true)
-        detailMonthTitle.tap()
+        navigate(app, destination: "bills", title: "账单")
+        let billMonthTitle = app.buttons["month.title"]
+        XCTAssertTrue(billMonthTitle.waitForExistence(timeout: 5))
+        XCTAssertTrue((billMonthTitle.value as? String)?.contains(String(previousPageLastYear)) == true)
+        XCTAssertTrue((billMonthTitle.value as? String)?.contains("1月") == true)
+        billMonthTitle.tap()
         XCTAssertTrue(app.buttons["month-picker.close"].waitForExistence(timeout: 5))
         app.buttons["month-picker.close"].tap()
         XCTAssertFalse(app.buttons["month-picker.close"].waitForExistence(timeout: 1))
@@ -134,7 +134,7 @@ final class NavigationSmokeTests: XCTestCase {
         }
         attachScreenshot(app, name: "categories-income")
         app.buttons["editor.cancel"].tap()
-        XCTAssertTrue(app.staticTexts["暂无账单"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["暂无明细"].waitForExistence(timeout: 10))
     }
 
     func testNewCategoriesPersistAcrossRelaunchIncludingLastRow() throws {
@@ -185,6 +185,7 @@ final class NavigationSmokeTests: XCTestCase {
         let app = makeApplication()
         app.launch()
         XCTAssertTrue(app.buttons["entry.add"].waitForExistence(timeout: 15))
+        navigate(app, destination: "bills", title: "账单")
         app.buttons["entry.add"].tap()
         XCTAssertTrue(app.buttons["keypad.1"].waitForExistence(timeout: 10))
         typeAmount(app, expression: "1.234")
@@ -233,6 +234,7 @@ final class NavigationSmokeTests: XCTestCase {
 
         app.terminate()
         app.launch()
+        navigate(app, destination: "bills", title: "账单")
         let persisted = entryButton(app, note: "UI测试修改早餐")
         XCTAssertTrue(persisted.waitForExistence(timeout: 15))
         XCTAssertTrue(app.staticTexts["summary.expense"].label.contains("23.45"))
@@ -246,7 +248,7 @@ final class NavigationSmokeTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["暂无账单"].waitForExistence(timeout: 10))
         app.terminate()
         app.launch()
-        XCTAssertTrue(app.staticTexts["暂无账单"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.staticTexts["暂无明细"].waitForExistence(timeout: 15))
         attachScreenshot(app, name: "entry-deleted-after-relaunch")
     }
 

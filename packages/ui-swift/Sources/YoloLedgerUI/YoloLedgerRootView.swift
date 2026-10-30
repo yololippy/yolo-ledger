@@ -15,7 +15,7 @@ private enum LedgerDestination: String, CaseIterable, Identifiable {
 @MainActor
 public struct YoloLedgerRootView: View {
     @State private var model: LedgerAppModel
-    @State private var selection: LedgerDestination = .bills
+    @State private var selection: LedgerDestination = .details
     @State private var showsNewEntry = false
     @State private var selectedEntry: LedgerEntry?
     @Environment(\.scenePhase) private var scenePhase
@@ -195,7 +195,7 @@ private struct LedgerEntriesView: View {
                             }
                         }
                     }
-                }.padding(.horizontal, 20).padding(.top, 2).padding(.bottom, 24)
+                }.padding(.horizontal, 20).padding(.top, 8).padding(.bottom, 24)
                     .frame(maxWidth: 760).frame(maxWidth: .infinity)
             }.refreshable { await model.refresh() }
         }

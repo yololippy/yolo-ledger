@@ -30,7 +30,7 @@ struct PaperCard: ViewModifier {
     var radius: CGFloat = 12
     func body(content: Content) -> some View {
         content.background(fill ?? theme.surface, in: RoundedRectangle(cornerRadius: radius))
-            .overlay { RoundedRectangle(cornerRadius: radius).stroke(theme.ink, lineWidth: 1.5) }
+            .overlay { RoundedRectangle(cornerRadius: radius).strokeBorder(theme.ink, lineWidth: 1.5) }
     }
 }
 extension View {
