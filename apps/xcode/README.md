@@ -6,14 +6,16 @@
 
 | Scheme / target | 产品 | Bundle ID |
 | --- | --- | --- |
-| YoloLedgerMac | 原生 Mac App | com.yololedger.macos |
-| YoloLedgerIOS | iPhone App | com.yololedger.ios |
-| YoloLedgerMacUITests | Mac 导航测试 target | com.yololedger.macos.uitests |
-| YoloLedgerIOSUITests | iPhone 导航及记账流程测试 | com.yololedger.ios.uitests |
+| YoloLedgerMac | 原生 Mac App | com.yololedger.app |
+| YoloLedgerIOS | iPhone App | com.yololedger.app |
+| YoloLedgerMacUITests | Mac 导航测试 target | com.yololedger.app.macos.uitests |
+| YoloLedgerIOSUITests | iPhone 导航及记账流程测试 | com.yololedger.app.ios.uitests |
 
 显示名“有落”，英文名 `YoloLedger`。iOS 仅面向 iPhone，关闭 iPad、Mac Catalyst、Designed for iPhone on Mac 和 Vision 兼容入口；Mac 使用独立原生 target。
 
-`Support/LedgerAppBootstrap.swift` 同时编入两个 App，长期持有 `SwiftDataLedgerRepository` 并注入共享 UI。默认位置为各 App 容器的 `Application Support/YoloLedger/ledger.store`。打开失败显示错误和重试，不回退内存、不清库、不调用 fatalError。当前仅本地保存，未接入 iCloud。
+`Support/LedgerAppBootstrap.swift` 同时编入两个 App，长期持有 `SwiftDataLedgerRepository` 并注入共享 UI。默认位置为各 App 容器的 `Application Support/YoloLedger/ledger.store`。打开失败显示错误和重试，不回退内存、不清库、不调用 fatalError。正常 App 使用 CloudKit 私有数据库自动同步；UI 测试参数仍强制使用纯本地隔离账库。
+
+两个 App Target 启用 CloudKit、iCloud Documents、推送与远程通知，并共享 `iCloud.com.yololedger.app`。首次成功访问 iCloud Documents 时创建 `Documents/关于有落.txt`，使“文件”App和 Finder 中出现用户可见的“有落”目录；运行中的 SwiftData 数据库不会写入该目录。
 
 iPhone target 通过 `Configuration/YoloLedgerIOS.entitlements` 将默认数据保护设为 `NSFileProtectionComplete`，存储层同时处理既有数据库文件。Bundle ID 和 `Application Support` 相对路径保持稳定；SwiftData 以版本化 schema 打开，版本变化前先创建不覆盖的本地升级快照。
 

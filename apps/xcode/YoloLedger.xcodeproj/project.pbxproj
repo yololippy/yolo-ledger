@@ -141,7 +141,7 @@
 				"ENABLE_HARDENED_RUNTIME" = "YES";
 				"CODE_SIGN_ENTITLEMENTS" = "Configuration/YoloLedgerMac.entitlements";
 				"INFOPLIST_FILE" = "Configuration/Mac-Info.plist";
-				"PRODUCT_BUNDLE_IDENTIFIER" = "com.yololedger.macos";
+				"PRODUCT_BUNDLE_IDENTIFIER" = "com.yololedger.app";
 			};
 			"name" = "Debug";
 		};
@@ -162,7 +162,7 @@
 				"ENABLE_HARDENED_RUNTIME" = "YES";
 				"CODE_SIGN_ENTITLEMENTS" = "Configuration/YoloLedgerMac.entitlements";
 				"INFOPLIST_FILE" = "Configuration/Mac-Info.plist";
-				"PRODUCT_BUNDLE_IDENTIFIER" = "com.yololedger.macos";
+				"PRODUCT_BUNDLE_IDENTIFIER" = "com.yololedger.app";
 			};
 			"name" = "Release";
 		};
@@ -244,7 +244,7 @@
 				"CODE_SIGN_STYLE" = "Automatic";
 				"GENERATE_INFOPLIST_FILE" = "YES";
 				"PRODUCT_NAME" = "$(TARGET_NAME)";
-				"PRODUCT_BUNDLE_IDENTIFIER" = "com.yololedger.macos.uitests";
+				"PRODUCT_BUNDLE_IDENTIFIER" = "com.yololedger.app.macos.uitests";
 				"TEST_TARGET_NAME" = "YoloLedgerMac";
 				"SDKROOT" = "macosx";
 				"SUPPORTED_PLATFORMS" = "macosx";
@@ -261,7 +261,7 @@
 				"CODE_SIGN_STYLE" = "Automatic";
 				"GENERATE_INFOPLIST_FILE" = "YES";
 				"PRODUCT_NAME" = "$(TARGET_NAME)";
-				"PRODUCT_BUNDLE_IDENTIFIER" = "com.yololedger.macos.uitests";
+				"PRODUCT_BUNDLE_IDENTIFIER" = "com.yololedger.app.macos.uitests";
 				"TEST_TARGET_NAME" = "YoloLedgerMac";
 				"SDKROOT" = "macosx";
 				"SUPPORTED_PLATFORMS" = "macosx";
@@ -386,7 +386,7 @@
 				"SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD" = "NO";
 				"CODE_SIGN_IDENTITY[sdk=iphonesimulator*]" = "-";
 				"INFOPLIST_FILE" = "Configuration/IOS-Info.plist";
-				"PRODUCT_BUNDLE_IDENTIFIER" = "com.yololedger.ios";
+				"PRODUCT_BUNDLE_IDENTIFIER" = "com.yololedger.app";
 			};
 			"name" = "Debug";
 		};
@@ -409,7 +409,7 @@
 				"SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD" = "NO";
 				"CODE_SIGN_IDENTITY[sdk=iphonesimulator*]" = "-";
 				"INFOPLIST_FILE" = "Configuration/IOS-Info.plist";
-				"PRODUCT_BUNDLE_IDENTIFIER" = "com.yololedger.ios";
+				"PRODUCT_BUNDLE_IDENTIFIER" = "com.yololedger.app";
 			};
 			"name" = "Release";
 		};
@@ -491,7 +491,7 @@
 				"CODE_SIGN_STYLE" = "Automatic";
 				"GENERATE_INFOPLIST_FILE" = "YES";
 				"PRODUCT_NAME" = "$(TARGET_NAME)";
-				"PRODUCT_BUNDLE_IDENTIFIER" = "com.yololedger.ios.uitests";
+				"PRODUCT_BUNDLE_IDENTIFIER" = "com.yololedger.app.ios.uitests";
 				"TEST_TARGET_NAME" = "YoloLedgerIOS";
 				"SDKROOT" = "iphoneos";
 				"SUPPORTED_PLATFORMS" = "iphoneos iphonesimulator";
@@ -510,7 +510,7 @@
 				"CODE_SIGN_STYLE" = "Automatic";
 				"GENERATE_INFOPLIST_FILE" = "YES";
 				"PRODUCT_NAME" = "$(TARGET_NAME)";
-				"PRODUCT_BUNDLE_IDENTIFIER" = "com.yololedger.ios.uitests";
+				"PRODUCT_BUNDLE_IDENTIFIER" = "com.yololedger.app.ios.uitests";
 				"TEST_TARGET_NAME" = "YoloLedgerIOS";
 				"SDKROOT" = "iphoneos";
 				"SUPPORTED_PLATFORMS" = "iphoneos iphonesimulator";
@@ -640,8 +640,34 @@
 				"BuildIndependentTargetsInParallel" = "YES";
 				"LastUpgradeCheck" = "2710";
 				"TargetAttributes" = {
+					"3A747228B6663AA6FDE93B25" = {
+						"SystemCapabilities" = {
+							"com.apple.BackgroundModes" = {
+								"enabled" = 1;
+							};
+							"com.apple.Push" = {
+								"enabled" = 1;
+							};
+							"com.apple.iCloud" = {
+								"enabled" = 1;
+							};
+						};
+					};
 					"4EF992AAC832339008981130" = {
 						"TestTargetID" = "DA01A563512A61CED9C1988A";
+					};
+					"DA01A563512A61CED9C1988A" = {
+						"SystemCapabilities" = {
+							"com.apple.BackgroundModes" = {
+								"enabled" = 1;
+							};
+							"com.apple.Push" = {
+								"enabled" = 1;
+							};
+							"com.apple.iCloud" = {
+								"enabled" = 1;
+							};
+						};
 					};
 					"569B6DCF629BDAED16D4A2D1" = {
 						"TestTargetID" = "3A747228B6663AA6FDE93B25";

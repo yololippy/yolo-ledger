@@ -21,21 +21,24 @@ final class LedgerAppBootstrap {
         failure = nil
         defer { isOpening = false }
         do {
-            let url = try storeURL()
+            let configuration = try storeConfiguration()
             #if DEBUG
             if failsOnce {
                 failsOnce = false
                 throw LaunchError.injectedFailure
             }
             #endif
-            repository = try SwiftDataLedgerRepository(storeURL: url)
+            repository = try SwiftDataLedgerRepository(
+                storeURL: configuration.url,
+                syncMode: configuration.syncMode
+            )
         } catch {
             let detail = (error as? any LocalizedError)?.errorDescription ?? "请检查本机存储空间或稍后重试。"
             failure = "本地账库无法打开。\(detail)"
         }
     }
 
-    private func storeURL() throws -> URL {
+    private func storeConfiguration() throws -> (url: URL, syncMode: LedgerSyncMode) {
         let standard = try SwiftDataLedgerRepository.defaultStoreURL()
         #if DEBUG
         let args = ProcessInfo.processInfo.arguments
@@ -43,13 +46,14 @@ final class LedgerAppBootstrap {
             guard args.indices.contains(index + 1), let id = UUID(uuidString: args[index + 1]) else {
                 throw LaunchError.invalidTestStore
             }
-            return standard.deletingLastPathComponent()
+            let url = standard.deletingLastPathComponent()
                 .appendingPathComponent("UITests", isDirectory: true)
                 .appendingPathComponent(id.uuidString, isDirectory: true)
                 .appendingPathComponent("ledger.store", isDirectory: false)
+            return (url, .local)
         }
         #endif
-        return standard
+        return (standard, YoloLedgerICloud.syncMode)
     }
 }
 
@@ -84,6 +88,47 @@ struct LedgerAppContent: View {
             }
         }
         .ledgerTheme(.pastel)
-        .task { bootstrap.open() }
+        .task {
+            bootstrap.open()
+            await ICloudDocumentsBootstrap.prepareIfNeeded()
+        }
+    }
+}
+
+private enum ICloudDocumentsBootstrap {
+    private static let completionKey = "icloud-documents-bootstrap-v1"
+
+    static func prepareIfNeeded() async {
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--ui-test-store") { return }
+        #endif
+        guard !UserDefaults.standard.bool(forKey: completionKey) else { return }
+
+        let prepared = await Task.detached(priority: .utility) {
+            let fileManager = FileManager.default
+            guard let containerURL = fileManager.url(
+                forUbiquityContainerIdentifier: YoloLedgerICloud.containerIdentifier
+            ) else { return false }
+
+            let documentsURL = containerURL.appendingPathComponent("Documents", isDirectory: true)
+            let welcomeURL = documentsURL.appendingPathComponent("关于有落.txt", isDirectory: false)
+            do {
+                try fileManager.createDirectory(at: documentsURL, withIntermediateDirectories: true)
+                if !fileManager.fileExists(atPath: welcomeURL.path) {
+                    let content = """
+                    有落 · YoloLedger
+
+                    此目录用于保存你主动创建的账单导出、备份和后续附件。
+                    日常记账数据由有落在本机保存，并通过 iCloud 自动同步。
+                    """
+                    try Data(content.utf8).write(to: welcomeURL, options: .atomic)
+                }
+                return true
+            } catch {
+                return false
+            }
+        }.value
+
+        if prepared { UserDefaults.standard.set(true, forKey: completionKey) }
     }
 }

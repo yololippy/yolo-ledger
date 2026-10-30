@@ -18,10 +18,10 @@ description: "在 yolo-ledger 中构建、安装并验证 iPhone 真机 Debug �
 ## 安装流程
 
 1. 使用 `xcrun devicectl list devices` 查找 `Reality` 为 `physical`、状态为 `connected` 的 iPhone，并保存本次命令使用的设备标识。不要选 `simulated` 行。
-2. 检查本机现有签名材料，不要从证书显示名称猜团队 ID。优先在以下目录查找与 `com.yololedger.ios` 匹配的 `.mobileprovision`：
+2. 检查本机现有签名材料，不要从证书显示名称猜团队 ID。优先在以下目录查找与 `com.yololedger.app` 匹配的 `.mobileprovision`：
    - `~/Library/Developer/Xcode/UserData/Provisioning Profiles/`
    - `~/Library/MobileDevice/Provisioning Profiles/`
-3. 使用 `security cms -D -i <profile>` 解码描述文件，并读取 `TeamIdentifier[0]`；同时确认 `Entitlements.application-identifier` 以 `.com.yololedger.ios` 结尾。
+3. 使用 `security cms -D -i <profile>` 解码描述文件，并读取 `TeamIdentifier[0]`；同时确认 `Entitlements.application-identifier` 以 `.com.yololedger.app` 结尾，并包含共享 iCloud Container 权限。
    - `Apple Development: ... (<标识>)` 中括号内的值可能是证书用户标识，不一定是 `DEVELOPMENT_TEAM`。
    - 以描述文件的 `TeamIdentifier` 为准。不要把实际值写入仓库。
 4. 使用独立的 `/tmp/yolo-ledger-...` Derived Data 目录构建真机 Debug 版。命令形态如下，运行时替换占位值，不将其原样执行：
@@ -52,7 +52,7 @@ description: "在 yolo-ledger 中构建、安装并验证 iPhone 真机 Debug �
    ```sh
    xcrun devicectl device process launch \
      --device <DEVICE_ID> \
-     com.yololedger.ios
+     com.yololedger.app
    ```
 
 ## 失败处理与汇报
@@ -61,4 +61,4 @@ description: "在 yolo-ledger 中构建、安装并验证 iPhone 真机 Debug �
 - `No Account for Team` 或找不到 profile：先检查是否误用了证书名称中的个人标识，再检查匹配 Bundle ID 的描述文件和 Xcode 账号状态。
 - 安装失败时保留构建结果和原始错误，不卸载 App、不清理用户数据、不反复更换签名。
 - 启动失败不等同于安装失败；分别报告 CoreDevice 返回的构建、安装、启动结果。
-- 成功回复只需说明当前 Debug 版已安装并启动、Bundle ID 为 `com.yololedger.ios`，以及是否包含当前工作树未提交改动；不要回显上述个人或设备标识。
+- 成功回复只需说明当前 Debug 版已安装并启动、Bundle ID 为 `com.yololedger.app`，以及是否包含当前工作树未提交改动；不要回显上述个人或设备标识。

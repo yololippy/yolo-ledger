@@ -4,7 +4,7 @@
 
 当前支持本地手动收支、详情／编辑／确认删除、基础账本管理及选择、当前月汇总。账单／明细页支持 Cmd+N；表单支持默认保存键盘动作。
 
-Bundle ID：`com.yololedger.macos`。当前开发机为 Mac mini（Apple M6、24 GB、arm64），运行 macOS 27.0.1（26A434）。工程临时构建基线是 macOS 14，正式最低支持版本仍待确定。
+Bundle ID：`com.yololedger.app`，与 iPhone Target 统一并共享 `iCloud.com.yololedger.app`。当前开发机为 Mac mini（Apple M6、24 GB、arm64），运行 macOS 27.0.1（26A434）。工程临时构建基线是 macOS 14，正式最低支持版本仍待确定。
 
 main 于 2026-10-28 使用独立 DEBUG 账库进行 native computer-use 验收：新增支出、修改金额与中文备注、收入分类、月度收支结余、账本创建／重命名／切换，以及重启保留均已通过。删除确认与取消已验证；真正确认删除的端到端流程由 iPhone XCTest 覆盖。后续复测还确认 Cmd+N、Return 保存、金额标签及编辑后详情辅助功能金额立即更新。
 
