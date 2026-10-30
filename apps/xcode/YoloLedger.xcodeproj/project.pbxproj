@@ -304,15 +304,26 @@
 			"path" = "../ios/Sources/YoloLedgerIOS/YoloLedgerIOSApp.swift";
 			"sourceTree" = "<group>";
 		};
+		"A8B1386B50A14B38A0C7D5C1" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "../ios/Sources/YoloLedgerIOS/ScreenshotLedgerIntent.swift";
+			"sourceTree" = "<group>";
+		};
 		"5E2B95AF406AC18640E40867" = {
 			"isa" = "PBXBuildFile";
 			"fileRef" = "26E8A0B31766B1D37A226662";
+		};
+		"B4A39766A5DA4AF2876FC9D2" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "A8B1386B50A14B38A0C7D5C1";
 		};
 		"7E1FC5A1F6A92982A7295444" = {
 			"isa" = "PBXSourcesBuildPhase";
 			"buildActionMask" = 2147483647;
 			"files" = (
 				"5E2B95AF406AC18640E40867",
+				"B4A39766A5DA4AF2876FC9D2",
 				"51A4773BFFC96DEBC9DAB537",
 			);
 			"runOnlyForDeploymentPostprocessing" = 0;
@@ -554,6 +565,7 @@
 			"children" = (
 				"3A9B2EFD84612ACCA2F2C156",
 				"26E8A0B31766B1D37A226662",
+				"A8B1386B50A14B38A0C7D5C1",
 			);
 			"name" = "App Entries";
 			"sourceTree" = "<group>";

@@ -7,6 +7,7 @@ public enum LedgerEntryKind: String, CaseIterable, Codable, Sendable {
 
 public enum LedgerEntrySource: String, Codable, Sendable {
     case manual
+    case screenshotShortcut
 }
 
 public struct LedgerCategory: Identifiable, Equatable, Sendable {

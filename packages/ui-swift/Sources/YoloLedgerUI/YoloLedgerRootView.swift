@@ -15,14 +15,26 @@ private enum LedgerDestination: String, CaseIterable, Identifiable {
 @MainActor
 public struct YoloLedgerRootView: View {
     @State private var model: LedgerAppModel
+    @Binding private var pendingScreenshotProposal: LedgerScreenshotProposal?
     @State private var selection: LedgerDestination = .details
     @State private var showsNewEntry = false
+    @State private var newEntryDate = Date()
     @State private var selectedEntry: LedgerEntry?
+    @State private var screenshotProposalToConfirm: LedgerScreenshotProposal?
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.ledgerTheme) private var theme
 
     public init(repository: any LedgerRepository) {
         _model = State(initialValue: LedgerAppModel(repository: repository))
+        _pendingScreenshotProposal = .constant(nil)
+    }
+
+    public init(
+        repository: any LedgerRepository,
+        pendingScreenshotProposal: Binding<LedgerScreenshotProposal?>
+    ) {
+        _model = State(initialValue: LedgerAppModel(repository: repository))
+        _pendingScreenshotProposal = pendingScreenshotProposal
     }
 
     public var body: some View {
@@ -48,12 +60,31 @@ public struct YoloLedgerRootView: View {
         .onChange(of: scenePhase) { _, value in
             if value == .active { Task { await model.refresh() } }
         }
+        .onChange(of: model.hasLoaded) { _, _ in presentPendingScreenshotIfReady() }
+        .onChange(of: pendingScreenshotProposal?.id) { _, _ in presentPendingScreenshotIfReady() }
+        .onChange(of: showsNewEntry) { _, _ in presentPendingScreenshotIfReady() }
+        .onChange(of: selectedEntry?.id) { _, _ in presentPendingScreenshotIfReady() }
         #if os(iOS)
-        .fullScreenCover(isPresented: $showsNewEntry) { EntryEditorView(model: model) }
+        .fullScreenCover(isPresented: $showsNewEntry) { EntryEditorView(model: model, initialDate: newEntryDate) }
+        .fullScreenCover(item: $screenshotProposalToConfirm, onDismiss: {
+            pendingScreenshotProposal = nil
+        }) { proposal in
+            EntryEditorView(model: model, proposal: proposal)
+        }
         #else
-        .sheet(isPresented: $showsNewEntry) { EntryEditorView(model: model) }
+        .sheet(isPresented: $showsNewEntry) { EntryEditorView(model: model, initialDate: newEntryDate) }
         #endif
         .sheet(item: $selectedEntry) { EntryDetailView(model: model, entryID: $0.id) }
+    }
+
+    private func presentPendingScreenshotIfReady() {
+        guard model.hasLoaded,
+              !showsNewEntry,
+              selectedEntry == nil,
+              screenshotProposalToConfirm == nil,
+              let pendingScreenshotProposal
+        else { return }
+        screenshotProposalToConfirm = pendingScreenshotProposal
     }
 
     private var navigation: some View {
@@ -362,6 +393,7 @@ private struct LedgerBooksView: View {
 
 private struct LedgerProfileView: View {
     @Environment(\.ledgerTheme) private var theme
+    @Environment(\.openURL) private var openURL
     let model: LedgerAppModel
 
     var body: some View {
@@ -380,10 +412,50 @@ private struct LedgerProfileView: View {
                         .lineSpacing(5)
                         .accessibilityIdentifier("settings.sync-status")
                 }.padding(21).frame(maxWidth: .infinity,alignment: .leading).paperCard()
+                #if os(iOS)
+                VStack(alignment: .leading, spacing: 16) {
+                    Label("轻点两下，截图记账", systemImage: "hand.tap")
+                        .font(.headline)
+                    DashedRule()
+                    shortcutStep(number: 1, text: "在快捷指令中新建“有落截图记账”")
+                    shortcutStep(number: 2, text: "依次加入“截取屏幕”和有落“截图记账”")
+                    shortcutStep(number: 3, text: "前往设置 → 辅助功能 → 触控 → 轻点背面 → 轻点两下，选择该快捷指令")
+                    Button {
+                        guard let url = URL(string: "shortcuts://") else { return }
+                        openURL(url)
+                    } label: {
+                        Label("打开快捷指令", systemImage: "arrow.up.forward.app")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(PaperButtonStyle(fill: theme.primarySoft))
+                    .accessibilityIdentifier("settings.open-shortcuts")
+                }
+                .padding(21)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .paperCard()
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier("settings.back-tap-guide")
+                #endif
                 Text("有落 · YoloLedger").font(.caption).foregroundStyle(theme.muted).frame(maxWidth: .infinity).padding(.top, 15)
             }.padding(24).frame(maxWidth: 700).frame(maxWidth: .infinity)
         }
     }
+
+    #if os(iOS)
+    private func shortcutStep(number: Int, text: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Text("\(number)")
+                .font(.caption.bold())
+                .frame(width: 24, height: 24)
+                .background(theme.primarySoft, in: Circle())
+                .overlay { Circle().stroke(theme.ink, lineWidth: 1) }
+            Text(text)
+                .font(.system(size: 14))
+                .lineSpacing(4)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+    #endif
 
     private var syncTitle: String {
         switch model.syncState {

@@ -70,10 +70,23 @@ private enum LaunchError: LocalizedError {
 @MainActor
 struct LedgerAppContent: View {
     let bootstrap: LedgerAppBootstrap
+    @Binding private var pendingScreenshotProposal: LedgerScreenshotProposal?
+
+    init(
+        bootstrap: LedgerAppBootstrap,
+        pendingScreenshotProposal: Binding<LedgerScreenshotProposal?> = .constant(nil)
+    ) {
+        self.bootstrap = bootstrap
+        _pendingScreenshotProposal = pendingScreenshotProposal
+    }
+
     var body: some View {
         ZStack {
             if let repository = bootstrap.repository {
-                YoloLedgerRootView(repository: repository)
+                YoloLedgerRootView(
+                    repository: repository,
+                    pendingScreenshotProposal: $pendingScreenshotProposal
+                )
             } else if let failure = bootstrap.failure {
                 ContentUnavailableView {
                     Label("无法打开本地账库", systemImage: "externaldrive.badge.exclamationmark")

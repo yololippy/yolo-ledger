@@ -5,6 +5,7 @@ import YoloLedgerCore
 struct EntryEditorView: View {
     let model: LedgerAppModel
     let entry: LedgerEntry?
+    let proposal: LedgerScreenshotProposal?
     @Environment(\.dismiss) private var dismiss
     @Environment(\.ledgerTheme) private var theme
     @State private var kind: LedgerEntryKind
@@ -13,20 +14,34 @@ struct EntryEditorView: View {
     @State private var bookID: UUID?
     @State private var date: Date
     @State private var note: String
+    @State private var source: LedgerEntrySource
     @State private var creationID = UUID()
     @State private var errorMessage: String?
     @State private var showsDate = false
     @FocusState private var noteFocused: Bool
 
-    init(model: LedgerAppModel, entry: LedgerEntry? = nil) {
-        self.model = model; self.entry = entry
-        let kind = entry?.kind ?? .expense
+    init(
+        model: LedgerAppModel,
+        entry: LedgerEntry? = nil,
+        proposal: LedgerScreenshotProposal? = nil,
+        initialDate: Date? = nil
+    ) {
+        self.model = model; self.entry = entry; self.proposal = proposal
+        let kind = entry?.kind ?? proposal?.kind ?? .expense
         _kind = State(initialValue: kind)
-        _amountText = State(initialValue: entry?.amount.decimalString ?? "")
-        _categoryID = State(initialValue: entry?.categoryID ?? model.categories.first { $0.kind == kind }?.id)
+        _amountText = State(initialValue: entry?.amount.decimalString ?? proposal?.amountMinorUnits.map(LedgerAmount.format) ?? "")
+        _categoryID = State(initialValue: entry?.categoryID ?? model.categories.first {
+            $0.kind == kind && $0.name == proposal?.suggestedCategoryName
+        }?.id ?? model.categories.first { $0.kind == kind }?.id)
         _bookID = State(initialValue: entry?.bookID ?? model.selectedBookID)
-        _date = State(initialValue: entry?.date ?? Date())
-        _note = State(initialValue: entry?.note ?? "")
+        _date = State(initialValue: entry?.date ?? proposal?.transactionDate ?? initialDate ?? Date())
+        _note = State(initialValue: entry?.note ?? proposal?.merchant ?? "")
+        _source = State(initialValue: entry?.source ?? (proposal == nil ? .manual : .screenshotShortcut))
+        if proposal?.amountMinorUnits == 0 {
+            _errorMessage = State(initialValue: "识别到实付款为 0，本次没有实际支出；如仍需记账，请修改金额后保存。")
+        } else {
+            _errorMessage = State(initialValue: proposal != nil && proposal?.amount == nil ? "没有识别到明确金额，请手动输入并核对。" : nil)
+        }
     }
 
     var body: some View {
@@ -91,7 +106,9 @@ struct EntryEditorView: View {
             Button { dismiss() } label: { Image(systemName: "chevron.left").font(.system(size: 20)).frame(width: 36,height: 36) }
                 .accessibilityIdentifier("editor.cancel").accessibilityLabel("取消")
             Spacer()
-            Text(entry == nil ? "记一笔" : "编辑账目").font(.system(size: 16,weight: .semibold))
+            Text(proposal != nil ? "确认截图记账" : entry == nil ? "记一笔" : "编辑账目")
+                .font(.system(size: 16,weight: .semibold))
+                .accessibilityIdentifier(proposal == nil ? "editor.title" : "editor.screenshot-confirmation")
             Spacer()
             Menu {
                 ForEach(model.books) { book in
@@ -184,7 +201,7 @@ struct EntryEditorView: View {
             let amount = try LedgerAmountExpression.evaluate(amountText)
             guard let bookID else { errorMessage = "请选择账本。"; return }
             guard let categoryID else { errorMessage = "请选择分类。"; return }
-            let draft = LedgerEntryDraft(bookID: bookID,categoryID: categoryID,kind: kind,amount: amount,date: date,note: note)
+            let draft = LedgerEntryDraft(bookID: bookID,categoryID: categoryID,kind: kind,amount: amount,date: date,note: note,source: source)
             if await model.saveEntry(draft,editingID: entry?.id,creationID: creationID) { dismiss() }
             else { errorMessage = model.operationError }
         } catch { errorMessage = LedgerAppModel.message(for: error) }

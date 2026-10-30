@@ -19,6 +19,8 @@ final class NavigationSmokeTests: XCTestCase {
         XCTAssertTrue(app.buttons["book.add"].waitForExistence(timeout: 10))
         attachScreenshot(app, name: "03-books")
         navigate(app, destination: "settings", title: "我的")
+        XCTAssertTrue(app.otherElements["settings.back-tap-guide"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.buttons["settings.open-shortcuts"].exists)
         XCTAssertTrue(app.staticTexts["settings.sync-status"].waitForExistence(timeout: 10))
         attachScreenshot(app, name: "04-settings")
         navigate(app, destination: "details", title: "明细")
@@ -136,6 +138,26 @@ final class NavigationSmokeTests: XCTestCase {
         app.buttons["editor.cancel"].tap()
         XCTAssertTrue(app.staticTexts["暂无明细"].waitForExistence(timeout: 10))
     }
+
+    func testScreenshotShortcutProposalOpensPrefilledConfirmationAndSaves() throws {
+        let app = makeApplication()
+        app.launchArguments.append("--ui-test-screenshot-proposal")
+        app.launch()
+
+        XCTAssertTrue(app.staticTexts["editor.screenshot-confirmation"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.buttons["editor.amount"].label.contains("55.00"))
+        XCTAssertEqual(app.textFields["editor.note"].value as? String, "星巴克咖啡")
+        XCTAssertTrue(app.buttons["editor.kind.expense"].isSelected)
+        XCTAssertTrue(app.buttons["editor.category.A20E127A-36F6-401A-A6E3-000000000101"].isSelected)
+        attachScreenshot(app, name: "screenshot-shortcut-confirmation")
+
+        app.buttons["editor.save"].tap()
+        let saved = entryButton(app, note: "星巴克咖啡")
+        XCTAssertTrue(saved.waitForExistence(timeout: 10))
+        XCTAssertTrue(saved.label.contains("餐饮"))
+        XCTAssertTrue(saved.label.contains("55.00"))
+    }
+
 
     func testNewCategoriesPersistAcrossRelaunchIncludingLastRow() throws {
         let app = makeApplication()

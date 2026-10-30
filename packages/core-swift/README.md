@@ -22,12 +22,18 @@ Swift Package、library product 和模块名均为 `YoloLedgerCore`，目录为 
 - 表达式操作数可为零，每项最多两位小数且原始数字最多含一个小数点；纯整数后的尾点按整数额完成，例如 `12.` 等于 `12.00`，`12.+3.` 等于 `15.00`，而 `1.2.`、`1+0.0.` 必须报错。允许中间负数，最终结果必须大于零。
 - 表达式仅忽略整体首尾空白；不接受内部空白、一元正负号、悬空／连续运算符、括号、其他运算符或非法字符。语法错误抛出 `invalidAmountExpression`，操作数或逐步运算溢出抛出 `amountOverflow`，最终零／负数抛出 `nonPositiveAmount`，均有中文错误提示。
 - 表达式以 `Int64` 分执行 checked 加减，不使用浮点或动态求值，也不会为使最终结果可表示而忽略中途溢出。`LedgerAmount(input:)` 保持原有严格规则，仍不接受 `12.` 或表达式。
-- `LedgerEntryKind`：`.expense`、`.income`；`LedgerEntrySource` 当前仅有 `.manual`。
+- `LedgerEntryKind`：`.expense`、`.income`；`LedgerEntrySource` 包含手动记账 `.manual` 与快捷指令截图记账 `.screenshotShortcut`。
 - `LedgerCategory`：`id: UUID`、`name: String`、`kind: LedgerEntryKind`。
 - `LedgerEntryDraft`：`bookID`、`categoryID`、`kind`、`amount`、`date`、`note`、`source`；`note` 默认空字符串，`source` 默认 `.manual`。
 - `LedgerEntry`：上述草稿内容加稳定 `id: UUID`、`createdAt` 和 `updatedAt`。通过 `init(id:draft:createdAt:updatedAt:)` 创建，`draft` 可取回可编辑内容。
 
 金额、账本、分类、草稿和记录都是可跨并发边界传递的 `Sendable` 值对象。日期用 `Date` 保存绝对时刻，显示及时间范围按设备当前本地日历计算。
+
+### 截图识别规则
+
+- `LedgerRecognizedTextLine` 是平台 OCR 结果的轻量输入；Core 不依赖 Vision 或图片框架。
+- `LedgerScreenshotParser` 从文字行中提取最终金额、商户、交易日期、收支方向与基础分类建议，过滤时间、订单号、优惠和余额等干扰数字。
+- `LedgerScreenshotProposal` 是可编码的待确认结果，只保存结构化文字和候选值，不包含原始截图；iOS App 负责接收图片与调用 Vision。
 
 ### 异步仓库
 
@@ -87,7 +93,7 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test --package-pa
 
 Manifest 使用 `swift-tools-version: 6.0`，Swift 语言模式为 6。临时构建基线为 macOS 14 / iOS 17；产品最低支持系统版本仍待 main 确认。
 
-验证记录（2026-10-28）：使用指定 Xcode 的 Swift 6.4 / arm64 环境运行上述测试命令，构建通过，**42 项测试全部通过**。分类种子新增 4 项验证截图顺序、旧分类 ID 兼容、106–114 新 ID 映射及收入名称／顺序／ID 保持；金额表达式 12 项覆盖精确加减、左到右计算、末尾小数点、多余尾点回归、零操作数、中间负数、最终正数限制、非法语法、操作数和中间运算溢出，以及 `Int64.min` 中间结果恢复；其余 26 项覆盖原有严格金额解析、汇总、本地日期范围、DST 和关联校验。已有数据库的分类升级由 Storage 验证，分类页面及自定义键盘的双端 UI 验收由 Apple／main 完成。
+验证记录（2026-10-30）：使用指定 Xcode 的 Swift 6.4 / arm64 环境运行上述测试命令，构建通过，**50 项测试全部通过**。其中 8 项截图识别测试覆盖实付与优惠竞争、储值卡扣款与现金实付为零、普通订单退款服务、商户与分类、真实退款收入、日期／时间／订单号过滤、整数金额和待确认结果编码；原有 42 项继续覆盖金额、表达式、汇总、本地日期范围、DST、关联校验和分类种子。
 
 ## 后续业务约定
 

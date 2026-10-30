@@ -5,6 +5,18 @@ import YoloLedgerCore
 @testable import YoloLedgerStorage
 
 struct SwiftDataLedgerRepositoryTests {
+    @Test func screenshotShortcutSourcePersistsAcrossReopen() async throws {
+        let directory = TestDirectory()
+        defer { directory.remove() }
+        let repository = try SwiftDataLedgerRepository(storeURL: directory.storeURL)
+        let created = try await repository.createEntry(makeDraft(amount: 5_500, source: .screenshotShortcut))
+
+        let reopened = try SwiftDataLedgerRepository(storeURL: directory.storeURL)
+        let fetched = try #require(try await reopened.fetchEntries().first)
+        #expect(created.source == .screenshotShortcut)
+        #expect(fetched.source == .screenshotShortcut)
+    }
+
     @Test func starterChoicesAreStableAndInitializedOnce() async throws {
         let directory = TestDirectory()
         defer { directory.remove() }
@@ -324,7 +336,8 @@ private func makeDraft(
     kind: LedgerEntryKind = .expense,
     amount: Int64,
     date: Date = Date(timeIntervalSince1970: 1_700_000_000),
-    note: String = ""
+    note: String = "",
+    source: LedgerEntrySource = .manual
 ) -> LedgerEntryDraft {
     LedgerEntryDraft(
         bookID: bookID,
@@ -332,7 +345,8 @@ private func makeDraft(
         kind: kind,
         amount: try! LedgerAmount(minorUnits: amount),
         date: date,
-        note: note
+        note: note,
+        source: source
     )
 }
 
