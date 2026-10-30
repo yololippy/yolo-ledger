@@ -158,6 +158,27 @@ final class NavigationSmokeTests: XCTestCase {
         XCTAssertTrue(saved.label.contains("55.00"))
     }
 
+    func testAddingEntryUsesSelectedCalendarDate() throws {
+        let app = makeApplication()
+        app.launch()
+
+        let selectedDay = app.buttons["calendar.day.14"]
+        XCTAssertTrue(selectedDay.waitForExistence(timeout: 15))
+        selectedDay.tap()
+        XCTAssertTrue(selectedDay.isSelected)
+
+        app.buttons["entry.add"].tap()
+        XCTAssertTrue(app.buttons["keypad.1"].waitForExistence(timeout: 10))
+        typeAmount(app, expression: "64.20")
+        app.textFields["editor.note"].tap()
+        app.textFields["editor.note"].typeText("选中日期新增验证")
+        app.buttons["editor.keypad-return"].tap()
+        app.buttons["editor.save"].tap()
+
+        XCTAssertTrue(selectedDay.waitForExistence(timeout: 10))
+        XCTAssertTrue(selectedDay.isSelected)
+        XCTAssertTrue(entryButton(app, note: "选中日期新增验证").waitForExistence(timeout: 10))
+    }
 
     func testNewCategoriesPersistAcrossRelaunchIncludingLastRow() throws {
         let app = makeApplication()

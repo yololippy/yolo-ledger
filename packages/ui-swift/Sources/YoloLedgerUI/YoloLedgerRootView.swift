@@ -113,7 +113,10 @@ public struct YoloLedgerRootView: View {
     }
 
     private var addButton: some View {
-        Button { showsNewEntry = true } label: {
+        Button {
+            newEntryDate = selection == .details ? (model.selectedDay ?? Date()) : Date()
+            showsNewEntry = true
+        } label: {
             #if os(macOS)
             Label("记一笔", systemImage: "plus").fontWeight(.semibold).padding(14).frame(maxWidth: .infinity).paperCard()
             #else
