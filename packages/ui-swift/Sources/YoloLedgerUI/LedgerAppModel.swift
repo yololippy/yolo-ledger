@@ -14,6 +14,7 @@ final class LedgerAppModel {
     private(set) var isSaving = false
     private(set) var loadError: String?
     private(set) var operationError: String?
+    private(set) var syncState: LedgerSyncState
     private(set) var referenceDate = Date()
     private(set) var displayedMonth = Date()
     private(set) var selectedDay: Date?
@@ -23,6 +24,7 @@ final class LedgerAppModel {
 
     init(repository: any LedgerRepository) {
         self.repository = repository
+        self.syncState = repository.currentSyncState()
     }
 
     var selectedBook: LedgerBook? { books.first { $0.id == selectedBookID } }
@@ -75,6 +77,7 @@ final class LedgerAppModel {
     }
 
     func refresh() async {
+        syncState = repository.currentSyncState()
         loadGeneration &+= 1
         let generation = loadGeneration
         isLoading = true
@@ -94,12 +97,20 @@ final class LedgerAppModel {
             if !books.contains(where: { $0.id == selectedBookID }) {
                 selectedBookID = books.first?.id
             }
+            syncState = repository.currentSyncState()
             hasLoaded = true
         } catch is CancellationError {
             // A newer refresh or the next appearance will own the snapshot.
         } catch {
             guard generation == loadGeneration else { return }
             loadError = Self.message(for: error)
+        }
+    }
+
+    func observeRepositoryUpdates() async {
+        for await _ in repository.updates() {
+            guard !Task.isCancelled else { return }
+            await refresh()
         }
     }
 

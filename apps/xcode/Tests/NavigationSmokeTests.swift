@@ -19,7 +19,7 @@ final class NavigationSmokeTests: XCTestCase {
         XCTAssertTrue(app.buttons["book.add"].waitForExistence(timeout: 10))
         attachScreenshot(app, name: "03-books")
         navigate(app, destination: "settings", title: "我的")
-        XCTAssertTrue(app.staticTexts["settings.local-data"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["settings.sync-status"].waitForExistence(timeout: 10))
         attachScreenshot(app, name: "04-settings")
         navigate(app, destination: "bills", title: "账单")
         XCTAssertTrue(app.staticTexts["暂无账单"].waitForExistence(timeout: 10))

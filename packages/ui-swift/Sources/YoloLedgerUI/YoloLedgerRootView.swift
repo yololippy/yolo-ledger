@@ -41,7 +41,10 @@ public struct YoloLedgerRootView: View {
         .foregroundStyle(theme.ink)
         .font(.system(.body, design: .rounded))
         .tint(theme.primary)
-        .task { await model.refresh() }
+        .task {
+            await model.refresh()
+            await model.observeRepositoryUpdates()
+        }
         .onChange(of: scenePhase) { _, value in
             if value == .active { Task { await model.refresh() } }
         }
@@ -68,7 +71,7 @@ public struct YoloLedgerRootView: View {
                 }
                 Spacer()
                 addButton
-                Text("YoloLedger · 本地账本").font(.caption2).foregroundStyle(theme.muted)
+                Text("YoloLedger · 离线可用").font(.caption2).foregroundStyle(theme.muted)
             }.padding(22).frame(width: 195).background(theme.primarySoft)
             Rectangle().fill(theme.ink).frame(width: 1)
             destinationView.frame(maxWidth: .infinity)
@@ -133,7 +136,7 @@ public struct YoloLedgerRootView: View {
             case .bills, .details:
                 LedgerEntriesView(model: model, isMonthly: selection == .bills) { selectedEntry = $0 }
             case .books: LedgerBooksView(model: model)
-            case .settings: LedgerProfileView()
+            case .settings: LedgerProfileView(model: model)
             }
         }
     }
@@ -359,6 +362,7 @@ private struct LedgerBooksView: View {
 
 private struct LedgerProfileView: View {
     @Environment(\.ledgerTheme) private var theme
+    let model: LedgerAppModel
 
     var body: some View {
         ScrollView {
@@ -369,12 +373,56 @@ private struct LedgerProfileView: View {
                     VStack(alignment: .leading,spacing: 6) { Text("有落").font(.title2.bold()); Text("把生活，一笔笔留下").font(.caption).foregroundStyle(theme.muted) }
                 }.padding(.vertical, 12)
                 VStack(alignment: .leading,spacing: 18) {
-                    Label("本地账本", systemImage: "internaldrive").font(.headline)
+                    Label(syncTitle, systemImage: syncSymbol).font(.headline)
                     DashedRule()
-                    Text("数据保存在本机，未启用 iCloud 同步。").font(.system(size: 14)).lineSpacing(5).accessibilityIdentifier("settings.local-data")
+                    Text(syncDetail)
+                        .font(.system(size: 14))
+                        .lineSpacing(5)
+                        .accessibilityIdentifier("settings.sync-status")
                 }.padding(21).frame(maxWidth: .infinity,alignment: .leading).paperCard()
                 Text("有落 · YoloLedger").font(.caption).foregroundStyle(theme.muted).frame(maxWidth: .infinity).padding(.top, 15)
             }.padding(24).frame(maxWidth: 700).frame(maxWidth: .infinity)
+        }
+    }
+
+    private var syncTitle: String {
+        switch model.syncState {
+        case .localOnly: "本地账本"
+        case .checking: "正在检查 iCloud"
+        case .available: "iCloud 自动同步"
+        case .syncing: "正在同步"
+        case .unavailable: "iCloud 同步暂停"
+        case .error: "iCloud 同步异常"
+        }
+    }
+
+    private var syncSymbol: String {
+        switch model.syncState {
+        case .localOnly: "internaldrive"
+        case .checking, .syncing: "arrow.triangle.2.circlepath.icloud"
+        case .available: "checkmark.icloud"
+        case .unavailable, .error: "exclamationmark.icloud"
+        }
+    }
+
+    private var syncDetail: String {
+        switch model.syncState {
+        case .localOnly:
+            "数据仅保存在本机。"
+        case .checking:
+            "正在确认此设备的 Apple Account 和 iCloud 状态。"
+        case let .available(lastSuccessfulSync):
+            if let lastSuccessfulSync {
+                "数据保存在本机，并自动同步到 iCloud。最近同步：\(lastSuccessfulSync.formatted(date: .abbreviated, time: .shortened))。"
+            } else {
+                "数据保存在本机，并自动同步到 iCloud。"
+            }
+        case .syncing:
+            "正在上传或下载变更；本机记账可以继续使用。"
+        case let .unavailable(reason):
+            "\(reason) 本机数据仍可正常使用。"
+        case let .error(message):
+            "\(message) 本机数据未被清除，系统稍后会自动重试。"
         }
     }
 }
