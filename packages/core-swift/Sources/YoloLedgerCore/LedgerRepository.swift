@@ -1,6 +1,15 @@
 import Foundation
 
-/// M2 local CRUD contract. Values crossing isolation boundaries are Sendable.
+public enum LedgerSyncState: Equatable, Sendable {
+    case localOnly
+    case checking
+    case available(lastSuccessfulSync: Date?)
+    case syncing
+    case unavailable(reason: String)
+    case error(message: String)
+}
+
+/// Shared ledger contract. Values crossing isolation boundaries are Sendable.
 public protocol LedgerRepository: LedgerBookRepository {
     func fetchCategories() async throws -> [LedgerCategory]
     /// Returns the selected book's entries, or all entries when bookID is nil.
@@ -17,6 +26,10 @@ public protocol LedgerRepository: LedgerBookRepository {
     func createBook(name: String, id: UUID) async throws -> LedgerBook
     /// Keeps the book identity and any referencing entries unchanged.
     func renameBook(id: UUID, name: String) async throws -> LedgerBook
+
+    /// Emits after the persistent store imports remote changes or its sync state changes.
+    func updates() -> AsyncStream<Void>
+    func currentSyncState() -> LedgerSyncState
 }
 
 public extension LedgerRepository {
@@ -31,4 +44,10 @@ public extension LedgerRepository {
     func createBook(name: String) async throws -> LedgerBook {
         try await createBook(name: name, id: UUID())
     }
+
+    func updates() -> AsyncStream<Void> {
+        AsyncStream { continuation in continuation.finish() }
+    }
+
+    func currentSyncState() -> LedgerSyncState { .localOnly }
 }

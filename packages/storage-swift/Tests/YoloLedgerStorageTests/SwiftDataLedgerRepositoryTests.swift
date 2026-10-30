@@ -61,7 +61,7 @@ struct SwiftDataLedgerRepositoryTests {
         #expect(try await reopened.fetchEntries(bookID: created.bookID).isEmpty)
     }
 
-    @Test func deletedEntryStaysDeletedAfterReopen() async throws {
+    @Test @MainActor func deletedEntryStaysDeletedAfterReopen() async throws {
         let directory = TestDirectory()
         defer { directory.remove() }
         let created = try await createFixture(at: directory.storeURL, amount: 1)
@@ -74,6 +74,95 @@ struct SwiftDataLedgerRepositoryTests {
         }
         let reopened = try SwiftDataLedgerRepository(storeURL: directory.storeURL)
         #expect(try await reopened.fetchEntries().isEmpty)
+        await #expect(throws: LedgerError.duplicateIdentifier(created.id)) {
+            try await reopened.createEntry(makeDraft(amount: 2), id: created.id)
+        }
+
+        let container = try LocalLedgerStore.makeContainer(at: directory.storeURL)
+        let records = try ModelContext(container).fetch(FetchDescriptor<LedgerSchemaV1.EntryRecord>())
+        let record = try #require(records.first { $0.id == created.id })
+        #expect(record.deletedAt != nil)
+    }
+
+    @Test @MainActor func newerCloudConflictWinsAndDuplicatesAreRemoved() async throws {
+        let directory = TestDirectory()
+        defer { directory.remove() }
+        do {
+            _ = try SwiftDataLedgerRepository(storeURL: directory.storeURL)
+        }
+
+        let id = UUID()
+        let olderDate = Date(timeIntervalSince1970: 1_700_000_000)
+        let newerDate = olderDate.addingTimeInterval(60)
+        do {
+            let container = try LocalLedgerStore.makeContainer(at: directory.storeURL)
+            let context = ModelContext(container)
+            context.autosaveEnabled = false
+            context.insert(LedgerSchemaV1.EntryRecord(
+                id: id,
+                bookID: LedgerSeedData.defaultBook.id,
+                categoryID: LedgerSeedData.categories.first { $0.kind == .expense }!.id,
+                kindRawValue: LedgerEntryKind.expense.rawValue,
+                amountMinorUnits: 100,
+                occurredAt: olderDate,
+                note: "旧值",
+                sourceRawValue: LedgerEntrySource.manual.rawValue,
+                createdAt: olderDate,
+                updatedAt: olderDate
+            ))
+            context.insert(LedgerSchemaV1.EntryRecord(
+                id: id,
+                bookID: LedgerSeedData.defaultBook.id,
+                categoryID: LedgerSeedData.categories.first { $0.kind == .expense }!.id,
+                kindRawValue: LedgerEntryKind.expense.rawValue,
+                amountMinorUnits: 200,
+                occurredAt: newerDate,
+                note: "新值",
+                sourceRawValue: LedgerEntrySource.manual.rawValue,
+                createdAt: olderDate,
+                updatedAt: newerDate
+            ))
+            try context.save()
+        }
+
+        let repository = try SwiftDataLedgerRepository(storeURL: directory.storeURL)
+        let entry = try #require(await repository.fetchEntries().first { $0.id == id })
+        #expect(entry.amount.minorUnits == 200)
+        #expect(entry.note == "新值")
+
+        do {
+            let container = try LocalLedgerStore.makeContainer(at: directory.storeURL)
+            let records = try ModelContext(container).fetch(FetchDescriptor<LedgerSchemaV1.EntryRecord>())
+            #expect(records.filter { $0.id == id }.count == 1)
+        }
+
+        let deletionDate = newerDate.addingTimeInterval(60)
+        do {
+            let container = try LocalLedgerStore.makeContainer(at: directory.storeURL)
+            let context = ModelContext(container)
+            context.insert(LedgerSchemaV1.EntryRecord(
+                id: id,
+                bookID: LedgerSeedData.defaultBook.id,
+                categoryID: LedgerSeedData.categories.first { $0.kind == .expense }!.id,
+                kindRawValue: LedgerEntryKind.expense.rawValue,
+                amountMinorUnits: 200,
+                occurredAt: newerDate,
+                note: "新值",
+                sourceRawValue: LedgerEntrySource.manual.rawValue,
+                createdAt: olderDate,
+                updatedAt: deletionDate,
+                deletedAt: deletionDate
+            ))
+            try context.save()
+        }
+
+        let afterDeletion = try SwiftDataLedgerRepository(storeURL: directory.storeURL)
+        #expect(try await afterDeletion.fetchEntries().allSatisfy { $0.id != id })
+        let finalContainer = try LocalLedgerStore.makeContainer(at: directory.storeURL)
+        let finalRecords = try ModelContext(finalContainer).fetch(FetchDescriptor<LedgerSchemaV1.EntryRecord>())
+            .filter { $0.id == id }
+        #expect(finalRecords.count == 1)
+        #expect(finalRecords.first?.deletedAt == deletionDate)
     }
 
     @Test func multipleBooksFilterAndRenameWithoutChangingEntryReferences() async throws {

@@ -6,12 +6,14 @@ import YoloLedgerCore
 public struct SwiftDataLedgerRepository: LedgerRepository {
     public let storeURL: URL
     private let store: LedgerStoreActor
+    private let syncMonitor: CloudSyncMonitor
 
     /// Opens the database, initializes starter choices and applies pending seed-data revisions.
     /// Failures propagate to the caller; no in-memory or destructive fallback is used.
-    public init(storeURL: URL) throws {
+    public init(storeURL: URL, syncMode: LedgerSyncMode = .local) throws {
         self.storeURL = storeURL
-        self.store = try LedgerStoreActor(storeURL: storeURL)
+        self.store = try LedgerStoreActor(storeURL: storeURL, syncMode: syncMode)
+        self.syncMonitor = CloudSyncMonitor(syncMode: syncMode)
     }
 
     /// Resolves Application Support/YoloLedger/ledger.store inside the app's container.
@@ -57,23 +59,36 @@ public struct SwiftDataLedgerRepository: LedgerRepository {
     public func renameBook(id: UUID, name: String) async throws -> LedgerBook {
         try await store.renameBook(id: id, name: name)
     }
+
+    public func updates() -> AsyncStream<Void> { syncMonitor.updates() }
+
+    public func currentSyncState() -> LedgerSyncState { syncMonitor.currentState() }
 }
 
 private actor LedgerStoreActor: ModelActor {
     nonisolated let modelExecutor: any ModelExecutor
     nonisolated let modelContainer: ModelContainer
 
-    init(storeURL: URL) throws {
-        let container = try LocalLedgerStore.makeContainer(at: storeURL)
+    init(storeURL: URL, syncMode: LedgerSyncMode) throws {
+        let container = try LocalLedgerStore.makeContainer(at: storeURL, syncMode: syncMode)
         let context = ModelContext(container)
         context.autosaveEnabled = false
+        try Self.reconcileDuplicates(in: context)
         try LedgerSeedBootstrap.initialize(in: context)
+        try Self.reconcileDuplicates(in: context)
         self.modelContainer = container
         self.modelExecutor = DefaultSerialModelExecutor(modelContext: context)
     }
 
     func fetchBooks() throws -> [LedgerBook] {
-        try modelContext.fetch(FetchDescriptor<LedgerSchemaV1.BookRecord>())
+        try reconcileDuplicates()
+        return try activeBooks()
+    }
+
+    private func activeBooks() throws -> [LedgerBook] {
+        try modelContext.fetch(FetchDescriptor<LedgerSchemaV1.BookRecord>(
+            predicate: #Predicate { $0.deletedAt == nil }
+        ))
             .sorted { left, right in
                 left.sortOrder == right.sortOrder
                     ? left.id.uuidString < right.id.uuidString
@@ -83,7 +98,14 @@ private actor LedgerStoreActor: ModelActor {
     }
 
     func fetchCategories() throws -> [LedgerCategory] {
-        try modelContext.fetch(FetchDescriptor<LedgerSchemaV1.CategoryRecord>())
+        try reconcileDuplicates()
+        return try activeCategories()
+    }
+
+    private func activeCategories() throws -> [LedgerCategory] {
+        try modelContext.fetch(FetchDescriptor<LedgerSchemaV1.CategoryRecord>(
+            predicate: #Predicate { $0.deletedAt == nil }
+        ))
             .sorted { left, right in
                 left.sortOrder == right.sortOrder
                     ? left.id.uuidString < right.id.uuidString
@@ -98,14 +120,17 @@ private actor LedgerStoreActor: ModelActor {
     }
 
     func fetchEntries(bookID: UUID?) throws -> [LedgerEntry] {
-        let books = try fetchBooks()
-        let categories = try fetchCategories()
-        var descriptor = FetchDescriptor<LedgerSchemaV1.EntryRecord>()
+        try reconcileDuplicates()
+        let books = try activeBooks()
+        let categories = try activeCategories()
+        var descriptor = FetchDescriptor<LedgerSchemaV1.EntryRecord>(
+            predicate: #Predicate { $0.deletedAt == nil }
+        )
         if let selectedID = bookID {
             guard books.contains(where: { $0.id == selectedID }) else {
                 throw LedgerError.bookNotFound(selectedID)
             }
-            descriptor.predicate = #Predicate { $0.bookID == selectedID }
+            descriptor.predicate = #Predicate { $0.bookID == selectedID && $0.deletedAt == nil }
         }
         return try modelContext.fetch(descriptor)
             .map { record in
@@ -121,7 +146,10 @@ private actor LedgerStoreActor: ModelActor {
     }
 
     func createEntry(_ draft: LedgerEntryDraft, id: UUID) throws -> LedgerEntry {
-        guard try findEntry(id: id) == nil else { throw LedgerError.duplicateIdentifier(id) }
+        try reconcileDuplicates()
+        guard try findEntry(id: id, includesDeleted: true) == nil else {
+            throw LedgerError.duplicateIdentifier(id)
+        }
         try validate(draft)
         let now = Date()
         let record = LedgerSchemaV1.EntryRecord(
@@ -143,6 +171,7 @@ private actor LedgerStoreActor: ModelActor {
     }
 
     func updateEntry(id: UUID, draft: LedgerEntryDraft) throws -> LedgerEntry {
+        try reconcileDuplicates()
         guard let record = try findEntry(id: id) else { throw LedgerError.entryNotFound(id) }
         try validate(draft)
         return try save {
@@ -158,14 +187,24 @@ private actor LedgerStoreActor: ModelActor {
     }
 
     func deleteEntry(id: UUID) throws {
+        try reconcileDuplicates()
         guard let record = try findEntry(id: id) else { throw LedgerError.entryNotFound(id) }
-        try save { modelContext.delete(record) }
+        try save {
+            let now = Date()
+            record.deletedAt = now
+            record.updatedAt = max(now, record.updatedAt)
+        }
     }
 
     func createBook(name: String, id: UUID) throws -> LedgerBook {
+        try reconcileDuplicates()
         let normalizedName = try LedgerValidation.normalizedName(name)
-        guard try findBook(id: id) == nil else { throw LedgerError.duplicateIdentifier(id) }
-        let records = try modelContext.fetch(FetchDescriptor<LedgerSchemaV1.BookRecord>())
+        guard try findBook(id: id, includesDeleted: true) == nil else {
+            throw LedgerError.duplicateIdentifier(id)
+        }
+        let records = try modelContext.fetch(FetchDescriptor<LedgerSchemaV1.BookRecord>(
+            predicate: #Predicate { $0.deletedAt == nil }
+        ))
         let (order, overflow) = (records.map(\.sortOrder).max() ?? -1).addingReportingOverflow(1)
         guard !overflow else {
             throw LedgerStorageError.invalidStoredValue(entity: "账本", field: "排序")
@@ -178,28 +217,119 @@ private actor LedgerStoreActor: ModelActor {
     }
 
     func renameBook(id: UUID, name: String) throws -> LedgerBook {
+        try reconcileDuplicates()
         let normalizedName = try LedgerValidation.normalizedName(name)
         guard let record = try findBook(id: id) else { throw LedgerError.bookNotFound(id) }
         return try save {
             record.name = normalizedName
+            record.updatedAt = max(Date(), record.updatedAt)
             return LedgerBook(id: record.id, name: record.name)
         }
     }
 
     private func validate(_ draft: LedgerEntryDraft) throws {
-        try LedgerValidation.validate(draft, books: fetchBooks(), categories: fetchCategories())
+        try LedgerValidation.validate(draft, books: activeBooks(), categories: activeCategories())
     }
 
-    private func findEntry(id: UUID) throws -> LedgerSchemaV1.EntryRecord? {
-        var descriptor = FetchDescriptor<LedgerSchemaV1.EntryRecord>(predicate: #Predicate { $0.id == id })
+    private func findEntry(
+        id: UUID,
+        includesDeleted: Bool = false
+    ) throws -> LedgerSchemaV1.EntryRecord? {
+        var descriptor = FetchDescriptor<LedgerSchemaV1.EntryRecord>()
+        descriptor.predicate = includesDeleted
+            ? #Predicate { $0.id == id }
+            : #Predicate { $0.id == id && $0.deletedAt == nil }
         descriptor.fetchLimit = 1
         return try modelContext.fetch(descriptor).first
     }
 
-    private func findBook(id: UUID) throws -> LedgerSchemaV1.BookRecord? {
-        var descriptor = FetchDescriptor<LedgerSchemaV1.BookRecord>(predicate: #Predicate { $0.id == id })
+    private func findBook(
+        id: UUID,
+        includesDeleted: Bool = false
+    ) throws -> LedgerSchemaV1.BookRecord? {
+        var descriptor = FetchDescriptor<LedgerSchemaV1.BookRecord>()
+        descriptor.predicate = includesDeleted
+            ? #Predicate { $0.id == id }
+            : #Predicate { $0.id == id && $0.deletedAt == nil }
         descriptor.fetchLimit = 1
         return try modelContext.fetch(descriptor).first
+    }
+
+    private func reconcileDuplicates() throws {
+        try Self.reconcileDuplicates(in: modelContext)
+    }
+
+    private static func reconcileDuplicates(in context: ModelContext) throws {
+        let books = try context.fetch(FetchDescriptor<LedgerSchemaV1.BookRecord>())
+        for duplicates in Dictionary(grouping: books, by: \.id).values where duplicates.count > 1 {
+            let ordered = duplicates.sorted(by: preferredBook)
+            for record in ordered.dropFirst() { context.delete(record) }
+        }
+
+        let categories = try context.fetch(FetchDescriptor<LedgerSchemaV1.CategoryRecord>())
+        for duplicates in Dictionary(grouping: categories, by: \.id).values where duplicates.count > 1 {
+            let ordered = duplicates.sorted(by: preferredCategory)
+            for record in ordered.dropFirst() { context.delete(record) }
+        }
+
+        let entries = try context.fetch(FetchDescriptor<LedgerSchemaV1.EntryRecord>())
+        for duplicates in Dictionary(grouping: entries, by: \.id).values where duplicates.count > 1 {
+            let ordered = duplicates.sorted(by: preferredEntry)
+            for record in ordered.dropFirst() { context.delete(record) }
+        }
+
+        let metadata = try context.fetch(FetchDescriptor<LedgerSchemaV1.StoreMetadata>())
+        for duplicates in Dictionary(grouping: metadata, by: \.key).values where duplicates.count > 1 {
+            let ordered = duplicates.sorted {
+                String(describing: $0.persistentModelID) < String(describing: $1.persistentModelID)
+            }
+            for record in ordered.dropFirst() { context.delete(record) }
+        }
+
+        if context.hasChanges { try context.save() }
+    }
+
+    private static func preferredBook(
+        _ left: LedgerSchemaV1.BookRecord,
+        _ right: LedgerSchemaV1.BookRecord
+    ) -> Bool {
+        let leftDate = max(left.updatedAt, left.deletedAt ?? .distantPast)
+        let rightDate = max(right.updatedAt, right.deletedAt ?? .distantPast)
+        if leftDate != rightDate { return leftDate > rightDate }
+        if (left.deletedAt != nil) != (right.deletedAt != nil) { return left.deletedAt != nil }
+        if left.name != right.name { return left.name < right.name }
+        if left.sortOrder != right.sortOrder { return left.sortOrder < right.sortOrder }
+        return String(describing: left.persistentModelID) < String(describing: right.persistentModelID)
+    }
+
+    private static func preferredCategory(
+        _ left: LedgerSchemaV1.CategoryRecord,
+        _ right: LedgerSchemaV1.CategoryRecord
+    ) -> Bool {
+        let leftDate = max(left.updatedAt, left.deletedAt ?? .distantPast)
+        let rightDate = max(right.updatedAt, right.deletedAt ?? .distantPast)
+        if leftDate != rightDate { return leftDate > rightDate }
+        if (left.deletedAt != nil) != (right.deletedAt != nil) { return left.deletedAt != nil }
+        if left.name != right.name { return left.name < right.name }
+        if left.kindRawValue != right.kindRawValue { return left.kindRawValue < right.kindRawValue }
+        if left.sortOrder != right.sortOrder { return left.sortOrder < right.sortOrder }
+        return String(describing: left.persistentModelID) < String(describing: right.persistentModelID)
+    }
+
+    private static func preferredEntry(
+        _ left: LedgerSchemaV1.EntryRecord,
+        _ right: LedgerSchemaV1.EntryRecord
+    ) -> Bool {
+        let leftDate = max(left.updatedAt, left.deletedAt ?? .distantPast)
+        let rightDate = max(right.updatedAt, right.deletedAt ?? .distantPast)
+        if leftDate != rightDate { return leftDate > rightDate }
+        if (left.deletedAt != nil) != (right.deletedAt != nil) { return left.deletedAt != nil }
+        if left.createdAt != right.createdAt { return left.createdAt > right.createdAt }
+        if left.note != right.note { return left.note < right.note }
+        if left.amountMinorUnits != right.amountMinorUnits {
+            return left.amountMinorUnits < right.amountMinorUnits
+        }
+        return String(describing: left.persistentModelID) < String(describing: right.persistentModelID)
     }
 
     private func save<Value>(_ operation: () throws -> Value) throws -> Value {

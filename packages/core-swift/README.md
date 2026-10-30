@@ -41,6 +41,8 @@ func updateEntry(id: UUID, draft: LedgerEntryDraft) async throws -> LedgerEntry
 func deleteEntry(id: UUID) async throws
 func createBook(name: String, id: UUID) async throws -> LedgerBook
 func renameBook(id: UUID, name: String) async throws -> LedgerBook
+func updates() -> AsyncStream<Void>
+func currentSyncState() -> LedgerSyncState
 ```
 
 - `fetchEntries(bookID: nil)` 读取全部记录，传入账本 ID 则只读取该账本；无参 `fetchEntries()` 是读取全部记录的便捷重载。结果按记账日期降序、创建时间降序、UUID 字符串升序排列。
@@ -49,6 +51,7 @@ func renameBook(id: UUID, name: String) async throws -> LedgerBook
 - 新建／重命名账本先调用 `LedgerValidation.normalizedName(_:)`，去除首尾空白并拒绝空名称。`LedgerBook` 的原有非抛错初始化器保留兼容性，校验发生在写入边界。
 - 新增记录的两个时间戳由仓库生成；修改保留 ID、创建时间和原始来源，只更新内容与修改时间。删除不存在的记录应抛出 `entryNotFound`。
 - `LedgerError` 提供具体错误及中文 `LocalizedError` 提示。数据库读写错误由 Storage 继续抛出，成功与失败由调用方反馈。
+- `LedgerSyncState` 表达纯本地、检查中、可用、同步中、暂停和错误；`updates()` 在远端变化或同步状态变化后通知 UI 重新读取。Core 只定义抽象状态，不依赖 CloudKit。
 
 ### 日期范围与最小汇总
 
@@ -71,7 +74,7 @@ func renameBook(id: UUID, name: String) async throws -> LedgerBook
 | 宠物、住房、零食、旅行、通讯、医疗、Pos、礼金、运动 | `000000000106`–`000000000114` | 按列出顺序分配新 ID |
 | 工资、奖金、其他收入 | `000000000201`–`000000000203` | 名称、顺序、收入方向及 ID 均保持原样 |
 
-本次核实范围仅为截图中支出分类的名称与顺序；收入仍沿用 M2 初始选项，其他交互继续以实际参考材料为准。Core 只定义契约和规则；已有数据库的种子补齐、同 ID 名称更新及历史引用保留由 Storage 实现并验证。持久化、CRUD 的原子写入、重复 ID 拦截、时间戳维护和双端页面接入由对应模块实现。M2 不包含删除账本、分类管理、多币种、定时规则或 iCloud。
+本次核实范围仅为截图中支出分类的名称与顺序；收入仍沿用 M2 初始选项，其他交互继续以实际参考材料为准。Core 只定义契约和规则；已有数据库的种子补齐、同 ID 名称更新及历史引用保留由 Storage 实现并验证。持久化、CRUD 的原子写入、重复 ID 拦截、时间戳维护、同步实现和双端页面接入由对应模块实现。M2 不包含删除账本、分类管理、多币种或定时规则。
 
 ## 构建
 
@@ -88,4 +91,4 @@ Manifest 使用 `swift-tools-version: 6.0`，Swift 语言模式为 6。临时构
 
 ## 后续业务约定
 
-手机端采用手机当前系统本地时区计算日期范围和定时规则；独立运行的 Mac 按同样原则使用本机系统时区。定时规则的具体行为以喵喵记账实际操作结果为准，跨设备去重留待后续 iCloud 阶段。
+手机端采用手机当前系统本地时区计算日期范围和定时规则；独立运行的 Mac 按同样原则使用本机系统时区。定时规则的具体行为由产品需求确定；跨设备幂等随 M4 在现有 iCloud 同步基础上设计。

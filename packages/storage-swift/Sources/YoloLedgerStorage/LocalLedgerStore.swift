@@ -1,6 +1,18 @@
 import Foundation
 import SwiftData
 
+public enum LedgerSyncMode: Equatable, Sendable {
+    case local
+    case iCloudPrivate(containerIdentifier: String)
+}
+
+public enum YoloLedgerICloud {
+    public static let containerIdentifier = "iCloud.com.yololedger.app"
+    public static let syncMode: LedgerSyncMode = .iCloudPrivate(
+        containerIdentifier: containerIdentifier
+    )
+}
+
 public enum LedgerStorageError: Error, Equatable, Sendable, LocalizedError {
     case invalidStoreURL
     case invalidStoredValue(entity: String, field: String)
@@ -16,9 +28,12 @@ public enum LedgerStorageError: Error, Equatable, Sendable, LocalizedError {
 }
 
 enum LocalLedgerStore {
-    static let currentSchemaVersion = "1.0.0"
+    static let currentSchemaVersion = "1.1.0"
 
-    static func makeContainer(at storeURL: URL) throws -> ModelContainer {
+    static func makeContainer(
+        at storeURL: URL,
+        syncMode: LedgerSyncMode = .local
+    ) throws -> ModelContainer {
         guard storeURL.isFileURL, !storeURL.hasDirectoryPath else {
             throw LedgerStorageError.invalidStoreURL
         }
@@ -33,12 +48,22 @@ enum LocalLedgerStore {
             targetSchemaVersion: currentSchemaVersion
         )
         let schema = Schema(versionedSchema: LedgerSchemaV1.self)
+        let cloudKitDatabase: ModelConfiguration.CloudKitDatabase
+        let configurationName: String
+        switch syncMode {
+        case .local:
+            cloudKitDatabase = .none
+            configurationName = "YoloLedgerLocal"
+        case let .iCloudPrivate(containerIdentifier):
+            cloudKitDatabase = .private(containerIdentifier)
+            configurationName = "YoloLedgerCloud"
+        }
         let configuration = ModelConfiguration(
-            "YoloLedgerLocal",
+            configurationName,
             schema: schema,
             url: storeURL,
             allowsSave: true,
-            cloudKitDatabase: .none
+            cloudKitDatabase: cloudKitDatabase
         )
         let container = try ModelContainer(
             for: schema,

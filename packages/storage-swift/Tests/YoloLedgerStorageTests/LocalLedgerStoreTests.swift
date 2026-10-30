@@ -97,7 +97,10 @@ struct LocalLedgerStoreTests {
             targetSchemaVersion: LocalLedgerStore.currentSchemaVersion
         )
         #expect(FileManager.default.fileExists(atPath: snapshotURL.path))
-        #expect(try String(contentsOf: markerURL, encoding: .utf8) == "1.0.0\n")
+        #expect(
+            try String(contentsOf: markerURL, encoding: .utf8)
+                == "\(LocalLedgerStore.currentSchemaVersion)\n"
+        )
         #expect(try fetchBooks(from: snapshotURL).map(\.name) == ["升级前账本"])
 
         do {

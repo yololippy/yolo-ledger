@@ -11,13 +11,16 @@ import YoloLedgerCore
 import YoloLedgerStorage
 
 let storeURL = try SwiftDataLedgerRepository.defaultStoreURL()
-let repository: any LedgerRepository = try SwiftDataLedgerRepository(storeURL: storeURL)
+let repository: any LedgerRepository = try SwiftDataLedgerRepository(
+    storeURL: storeURL,
+    syncMode: YoloLedgerICloud.syncMode
+)
 let books = try await repository.fetchBooks()
 ```
 
 公开初始化接口：
 
-- `init(storeURL: URL) throws`：打开指定的真实磁盘数据库，测试可传入独立临时路径。
+- `init(storeURL:syncMode:) throws`：打开指定的真实磁盘数据库；默认 `.local` 便于测试，App 组装层传入 `YoloLedgerICloud.syncMode` 启用私有 CloudKit 同步。
 - `static func defaultStoreURL() throws -> URL`：生成当前 App 容器中的 `Application Support/YoloLedger/ledger.store` 路径。
 - `storeURL: URL`：记录实际打开的文件地址。
 
@@ -28,20 +31,22 @@ M1 的 `EmptyLedgerBookRepository` 继续保留，用于旧骨架和只需要 `L
 ## 保存与一致性
 
 - SwiftData 的 `ModelContext` 隔离在内部串行 `ModelActor` 中，跨模块只传递 Core 的 Sendable 值类型。
-- 显式配置磁盘 URL 和 `cloudKitDatabase: .none`；没有内存回退或删除旧库重建的错误恢复路径。目录、数据库初始化、读取和保存错误向调用方传播。
+- 显式配置磁盘 URL；正常 App 使用 `.private("iCloud.com.yololedger.app")`，单元与 UI 测试使用 `.none`。没有内存回退或删除旧库重建的错误恢复路径，目录、数据库初始化、读取和保存错误向调用方传播。
 - 关闭隐式 autosave，初始化种子和每个写操作显式 `save()`；发生错误时 `rollback()`，防止失败修改混入后续合法保存。
 - 使用 Core 的稳定种子账本／分类和已保存的初始化标记；重新打开仓库不会重复插入或重置已改名的种子账本。系统支出分类名称与顺序采用 Core 按用户截图提供的种子，原日用及收入分类继续保留。
 - 金额以 `Int64` 分保存，不转为 Double；保存原始 `Date`，本地时区的展示和日期范围计算由 Core / UI 负责。
 - 新增和更新前验证账本、分类、收支匹配和日期。重复及不存在的 ID 返回对应 `LedgerError`。更新账目保留 ID、`source` 和 `createdAt`，只修改可编辑字段与 `updatedAt`。
 - 同一 App 的窗口和页面复用一个仓库实例。已验证同一实例内并发提交相同 ID 只有一次成功；多进程或多个活跃仓库同时写同一路径的场景尚未验收。
+- CloudKit 模式移除持久层唯一约束，由仓库按业务 UUID 去重。相同 UUID 以较新的修改／删除时间优先，时间相同时用稳定字段排序；账目删除写入 `deletedAt`，避免另一设备把已删除记录重新上传回来。
+- `CloudSyncMonitor` 监听持久化 CloudKit 事件与 Apple Account 状态，通过 Core 的变更流触发 UI 重新读取；系统负责实际上传、下载和重试时机。
 
 ## 数据版本
 
-内部 `LedgerSchemaV1` 声明版本 `1.0.0`，包含账本、分类、账目和初始化标记。`LedgerMigrationPlan` 已登记 V1，当前没有跨版本迁移阶段。
+内部 `LedgerSchemaV1` 当前声明版本 `1.1.0`，包含账本、分类、账目和初始化标记，并为 CloudKit 属性提供默认值或可选值。`LedgerMigrationPlan` 已登记当前 schema，现阶段只有测试数据，未保留正式版 1.0 的跨版本迁移阶段。
 
 每次成功打开账库后，会在数据库旁记录当前 schema 版本。已有数据库首次由新 schema 打开前，存储层先把 SQLite 主文件、WAL 和 SHM 一起复制到同目录 `UpgradeSnapshots/before-<目标版本>/`；同一目标版本的快照只创建一次，失败或重试不会覆盖最初快照。快照完成前不启动 SwiftData 迁移，迁移失败不清库。今后新增 schema 时必须同时更新当前版本、保留旧 `VersionedSchema`、补迁移阶段和旧版本数据测试。
 
-本轮验证的是 V1 新建、重开、升级前快照及同一 schema 下的分类种子数据升级；尚无 V2，因此不能把快照测试表述为已经完成真实 V1 → V2 迁移。当前唯一约束和引用设计服务于本地版，后续如接入 iCloud，需另行评估兼容性和迁移方案。
+本轮验证的是当前 schema 新建、重开、升级前快照、分类种子升级、软删除以及重复 UUID 冲突收敛；尚未验证正式发布版本之间的真实迁移。上线后 schema 只能向前兼容演进，并需要保留旧 schema 与迁移测试。
 
 ## 本地数据保护
 
@@ -72,7 +77,7 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift build --package-p
 DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test --package-path packages/storage-swift
 ```
 
-2026-10-29 使用 Xcode 27.1 完成 macOS arm64 构建和 **21 项测试**。测试使用各自独立的真实临时磁盘文件，覆盖种子幂等、账目新增／更新／删除后重开保留、精确大额金额、账本筛选与改名、并发重复 ID、无效输入、失败回滚、升级前快照只创建一次，以及文件系统错误和损坏数据库不被清空。
+2026-10-30 使用 Xcode 27.1 完成 macOS arm64 构建和 **22 项测试**。测试使用各自独立的真实临时磁盘文件，覆盖种子幂等、账目新增／更新／软删除后重开保留、精确大额金额、账本筛选与改名、并发重复 ID、CloudKit 型重复 UUID 收敛、无效输入、失败回滚、升级前快照只创建一次，以及文件系统错误和损坏数据库不被清空。
 
 其中 5 项分类升级测试先直接写入冻结的旧 8 分类、旧初始化标记、旧账目和改名账本，真实落盘后再打开仓库升级；覆盖新旧安装一致、自定义数据保留、重开无重复、只读保存失败回滚与重试，以及已升级库无需再保存。
 
@@ -80,4 +85,4 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test --package-pa
 
 ## 后续职责与边界
 
-本轮实现本地账本与账目操作、一次性种子初始化和 V1 数据版本基础。完整备份恢复、分类管理、批量操作恢复、定时规则、截图识别及云同步均属于后续任务。
+本轮实现本地账本与账目操作、一次性种子初始化、CloudKit 兼容模型、同步事件通知和冲突去重。完整备份恢复、分类管理、批量操作恢复、定时规则和截图识别仍属于后续任务；CloudKit 真实双设备、Developer/Production Schema 与 iCloud Drive 可见目录另行验收。

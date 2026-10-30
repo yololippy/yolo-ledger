@@ -7,6 +7,7 @@ enum LedgerSeedBootstrap {
     private static let choicesV1Key = "starter-choices-v1"
     private static let categoriesV2Key = "starter-categories-v2"
     private static let legacyOtherExpenseID = UUID(uuidString: "A20E127A-36F6-401A-A6E3-000000000105")!
+    private static let seedTimestamp = Date(timeIntervalSinceReferenceDate: 0)
 
     static func initialize(in context: ModelContext) throws {
         do {
@@ -35,28 +36,48 @@ enum LedgerSeedBootstrap {
     private static func initializeChoices(in context: ModelContext) throws {
         let bookIDs = Set(try context.fetch(FetchDescriptor<LedgerSchemaV1.BookRecord>()).map(\.id))
         for (order, book) in LedgerSeedData.books.enumerated() where !bookIDs.contains(book.id) {
-            context.insert(LedgerSchemaV1.BookRecord(id: book.id, name: book.name, sortOrder: order))
+            context.insert(LedgerSchemaV1.BookRecord(
+                id: book.id,
+                name: book.name,
+                sortOrder: order,
+                createdAt: seedTimestamp,
+                updatedAt: seedTimestamp
+            ))
         }
         let categoryIDs = Set(try context.fetch(FetchDescriptor<LedgerSchemaV1.CategoryRecord>()).map(\.id))
         for (order, category) in LedgerSeedData.categories.enumerated() where !categoryIDs.contains(category.id) {
             context.insert(LedgerSchemaV1.CategoryRecord(
-                id: category.id, name: category.name, kindRawValue: category.kind.rawValue, sortOrder: order
+                id: category.id,
+                name: category.name,
+                kindRawValue: category.kind.rawValue,
+                sortOrder: order,
+                createdAt: seedTimestamp,
+                updatedAt: seedTimestamp
             ))
         }
     }
 
     private static func upgradeCategories(in context: ModelContext) throws {
+        let upgradeTimestamp = Date()
         let records = try context.fetch(FetchDescriptor<LedgerSchemaV1.CategoryRecord>())
         let recordsByID = Dictionary(uniqueKeysWithValues: records.map { ($0.id, $0) })
         for (order, category) in LedgerSeedData.categories.enumerated() {
             if let existing = recordsByID[category.id] {
+                var changed = existing.sortOrder != order
                 existing.sortOrder = order
                 if category.id == legacyOtherExpenseID && existing.name == "其他支出" {
                     existing.name = category.name
+                    changed = true
                 }
+                if changed { existing.updatedAt = max(existing.updatedAt, upgradeTimestamp) }
             } else {
                 context.insert(LedgerSchemaV1.CategoryRecord(
-                    id: category.id, name: category.name, kindRawValue: category.kind.rawValue, sortOrder: order
+                    id: category.id,
+                    name: category.name,
+                    kindRawValue: category.kind.rawValue,
+                    sortOrder: order,
+                    createdAt: seedTimestamp,
+                    updatedAt: seedTimestamp
                 ))
             }
         }
