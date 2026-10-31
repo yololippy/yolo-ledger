@@ -64,7 +64,11 @@ final class LedgerAppModel {
     }
 
     func monthSummary() throws -> LedgerSummary {
-        let range = try LedgerDateRanges.range(for: .month, containing: displayedMonth)
+        try monthSummary(containing: displayedMonth)
+    }
+
+    func monthSummary(containing date: Date) throws -> LedgerSummary {
+        let range = try LedgerDateRanges.range(for: .month, containing: date)
         return try LedgerSummary(entries: selectedEntries, dateRange: range)
     }
 

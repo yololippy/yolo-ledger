@@ -360,41 +360,69 @@ private struct LedgerCalendarView: View {
     @Environment(\.ledgerTheme) private var theme
     let model: LedgerAppModel
     private var calendar: Calendar { Calendar.current }
-    private var dates: [Date?] {
-        guard let range = try? LedgerDateRanges.range(for: .month, containing: model.displayedMonth),
+
+    var body: some View {
+        HorizontalPagingView(
+            page: model.displayedMonth,
+            previousPage: { calendar.date(byAdding: .month, value: -1, to: $0) ?? $0 },
+            nextPage: { calendar.date(byAdding: .month, value: 1, to: $0) ?? $0 },
+            selectPage: { model.selectMonth($0) },
+            debugIdentifier: "calendar.pager"
+        ) { month, paging in
+            calendarPage(month: month, paging: paging)
+                .padding(15)
+        }
+        .paperCard()
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("calendar.card")
+    }
+
+    private func dates(for month: Date) -> [Date?] {
+        guard let range = try? LedgerDateRanges.range(for: .month, containing: month),
               let count = calendar.range(of: .day, in: .month, for: range.start) else { return [] }
         let padding = (calendar.component(.weekday, from: range.start) - calendar.firstWeekday + 7) % 7
         return Array(repeating: nil, count: padding) + count.map { calendar.date(byAdding: .day, value: $0 - 1, to: range.start) }
     }
-    var body: some View {
-        VStack(spacing: 13) {
+
+    private func calendarPage(month: Date, paging: HorizontalPagingProxy) -> some View {
+        let isCurrentPage = calendar.isDate(month, equalTo: model.displayedMonth, toGranularity: .month)
+        let selectedDay = isCurrentPage ? model.selectedDay : nil
+        return VStack(spacing: 13) {
             HStack {
-                Button { model.moveMonth(by: -1) } label: { Image(systemName: "chevron.left").frame(width: 30,height: 30) }.accessibilityIdentifier("month.previous")
+                Button(action: paging.moveToPrevious) {
+                    Image(systemName: "chevron.left").frame(width: 30,height: 30)
+                }
+                .pagingAccessibilityIdentifier("month.previous")
                 Spacer()
-                MonthPickerButton(displayedMonth: model.displayedMonth) { model.selectMonth($0) }
+                MonthPickerButton(displayedMonth: month) { model.selectMonth($0) }
                 Spacer()
-                Button { model.moveMonth(by: 1) } label: { Image(systemName: "chevron.right").frame(width: 30,height: 30) }.accessibilityIdentifier("month.next")
+                Button(action: paging.moveToNext) {
+                    Image(systemName: "chevron.right").frame(width: 30,height: 30)
+                }
+                .pagingAccessibilityIdentifier("month.next")
             }.buttonStyle(.plain)
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(),spacing: 3),count: 7), spacing: 4) {
                 ForEach(0..<7, id: \.self) { index in
                     Text(calendar.veryShortStandaloneWeekdaySymbols[(calendar.firstWeekday - 1 + index) % 7]).font(.system(size: 11)).foregroundStyle(theme.muted).frame(height: 20)
                 }
-                ForEach(Array(dates.enumerated()), id: \.offset) { _, date in
+                ForEach(Array(dates(for: month).enumerated()), id: \.offset) { _, date in
                     if let date { dayButton(date) } else { Color.clear.frame(height: 42) }
                 }
             }
             DashedRule()
-            if let summary = try? model.selectedDay.map({ try model.daySummary($0) }) ?? model.monthSummary() {
+            if let summary = try? selectedDay.map({ try model.daySummary($0) }) ?? model.monthSummary(containing: month) {
                 HStack {
-                    Text(model.selectedDay == nil ? "本月收入" : "当日收入") + Text(" ¥\(LedgerAmount.format(minorUnits: summary.incomeMinorUnits))").foregroundColor(theme.income)
+                    Text(selectedDay == nil ? "本月收入" : "当日收入") + Text(" ¥\(LedgerAmount.format(minorUnits: summary.incomeMinorUnits))").foregroundColor(theme.income)
                     Spacer(minLength: 3)
-                    Text(model.selectedDay == nil ? "本月支出" : "当日支出") + Text(" ¥\(LedgerAmount.format(minorUnits: summary.expenseMinorUnits))").foregroundColor(theme.expense)
+                    Text(selectedDay == nil ? "本月支出" : "当日支出") + Text(" ¥\(LedgerAmount.format(minorUnits: summary.expenseMinorUnits))").foregroundColor(theme.expense)
                 }.font(.system(size: 10,weight: .medium)).minimumScaleFactor(0.6).lineLimit(1)
             }
-            if model.selectedDay != nil {
-                Button("查看整月") { if let day = model.selectedDay { model.selectDay(day) } }.font(.caption).accessibilityIdentifier("calendar.clear-selection")
+            if let selectedDay {
+                Button("查看整月") { model.selectDay(selectedDay) }
+                    .font(.caption)
+                    .pagingAccessibilityIdentifier("calendar.clear-selection")
             }
-        }.padding(15).paperCard()
+        }
     }
 
     private func dayButton(_ date: Date) -> some View {
@@ -410,7 +438,7 @@ private struct LedgerCalendarView: View {
                 .background(selected ? theme.primary : calendar.isDateInToday(date) ? theme.primarySoft : theme.calendarIdle, in: RoundedRectangle(cornerRadius: 5))
                 .foregroundStyle(selected ? theme.onPrimary : theme.ink)
         }.buttonStyle(.plain).accessibilityLabel(date.formatted(.dateTime.year().month().day()))
-            .accessibilityIdentifier("calendar.day.\(calendar.component(.day, from: date))")
+            .pagingAccessibilityIdentifier("calendar.day.\(calendar.component(.day, from: date))")
             .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }

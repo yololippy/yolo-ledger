@@ -23,7 +23,7 @@ struct MonthPickerButton: View {
             .background(theme.primarySoft.opacity(0.72), in: Capsule())
         }
         .buttonStyle(.plain)
-        .accessibilityIdentifier("month.title")
+        .pagingAccessibilityIdentifier("month.title")
         .accessibilityLabel("选择月份")
         .accessibilityValue(displayedMonth.formatted(.dateTime.year().month()))
         #if os(iOS)
@@ -79,20 +79,16 @@ private struct MonthPickerView: View {
                 .font(.system(size: 17, weight: .bold))
                 .padding(.top, topPadding)
 
-            navigationHeader
-
             Group {
                 if mode == .month {
-                    monthGrid
+                    monthPager
                         .transition(.opacity.combined(with: .scale(scale: 0.98)))
                 } else {
-                    yearGrid
+                    yearPager
                         .transition(.opacity.combined(with: .scale(scale: 0.98)))
                 }
             }
             .animation(.snappy(duration: 0.22), value: mode)
-            .contentShape(Rectangle())
-            .simultaneousGesture(horizontalPagingGesture)
 
             footer
         }
@@ -117,72 +113,103 @@ private struct MonthPickerView: View {
         }
     }
 
-    private var navigationHeader: some View {
-        HStack(spacing: 18) {
-            navigationButton(systemName: "chevron.left") {
-                if mode == .month {
-                    selectedYear -= 1
-                } else {
-                    yearPageStart -= 12
+    private var monthPager: some View {
+        HorizontalPagingView(
+            page: selectedYear,
+            previousPage: { $0 - 1 },
+            nextPage: { $0 + 1 },
+            selectPage: { selectedYear = $0 },
+            gesturePriority: .high,
+            debugIdentifier: "month-picker.year-pager"
+        ) { year, paging in
+            VStack(spacing: sectionSpacing) {
+                HStack(spacing: 18) {
+                    navigationButton(systemName: "chevron.left", action: paging.moveToPrevious)
+                        .pagingAccessibilityIdentifier("month-picker.year.previous")
+
+                    Spacer(minLength: 0)
+
+                    yearToggle(year: year)
+
+                    Spacer(minLength: 0)
+
+                    navigationButton(systemName: "chevron.right", action: paging.moveToNext)
+                        .pagingAccessibilityIdentifier("month-picker.year.next")
                 }
+
+                monthGrid(for: year)
             }
-            .accessibilityIdentifier(mode == .month ? "month-picker.year.previous" : "month-picker.range.previous")
-
-            Spacer(minLength: 0)
-
-            if mode == .month {
-                Button {
-                    yearPageStart = Self.initialYearPage(containing: selectedYear)
-                    withAnimation { mode = .year }
-                } label: {
-                    HStack(spacing: 5) {
-                        Text(verbatim: "\(selectedYear) 年")
-                        Image(systemName: "chevron.down").font(.system(size: 10, weight: .bold))
-                    }
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundStyle(theme.primary)
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("month-picker.year-toggle")
-            } else {
-                Text(verbatim: "\(yearPageStart)–\(yearPageStart + 11)")
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundStyle(theme.primary)
-                    .accessibilityIdentifier("month-picker.year-range")
-            }
-
-            Spacer(minLength: 0)
-
-            navigationButton(systemName: "chevron.right") {
-                if mode == .month {
-                    selectedYear += 1
-                } else {
-                    yearPageStart += 12
-                }
-            }
-            .accessibilityIdentifier(mode == .month ? "month-picker.year.next" : "month-picker.range.next")
         }
     }
 
-    private var monthGrid: some View {
+    private var yearPager: some View {
+        HorizontalPagingView(
+            page: yearPageStart,
+            previousPage: { $0 - 12 },
+            nextPage: { $0 + 12 },
+            selectPage: { yearPageStart = $0 },
+            gesturePriority: .high,
+            debugIdentifier: "month-picker.range-pager"
+        ) { pageStart, paging in
+            VStack(spacing: sectionSpacing) {
+                HStack(spacing: 18) {
+                    navigationButton(systemName: "chevron.left", action: paging.moveToPrevious)
+                        .pagingAccessibilityIdentifier("month-picker.range.previous")
+
+                    Spacer(minLength: 0)
+
+                    Text(verbatim: "\(pageStart)–\(pageStart + 11)")
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundStyle(theme.primary)
+                        .pagingAccessibilityIdentifier("month-picker.year-range")
+
+                    Spacer(minLength: 0)
+
+                    navigationButton(systemName: "chevron.right", action: paging.moveToNext)
+                        .pagingAccessibilityIdentifier("month-picker.range.next")
+                }
+
+                yearGrid(pageStart: pageStart)
+            }
+        }
+    }
+
+    private func yearToggle(year: Int) -> some View {
+        Button {
+            yearPageStart = Self.initialYearPage(containing: year)
+            withAnimation { mode = .year }
+        } label: {
+            HStack(spacing: 5) {
+                Text(verbatim: "\(year) 年")
+                Image(systemName: "chevron.down").font(.system(size: 10, weight: .bold))
+            }
+            .font(.system(size: 20, weight: .bold))
+            .foregroundStyle(theme.primary)
+        }
+        .buttonStyle(.plain)
+        .pagingAccessibilityIdentifier("month-picker.year-toggle")
+    }
+
+    private func monthGrid(for year: Int) -> some View {
         LazyVGrid(columns: columns, spacing: gridSpacing) {
             ForEach(1...12, id: \.self) { month in
                 selectionButton(
                     title: "\(month)月",
-                    isSelected: selectedYear == highlightedYear && month == selectedMonth,
+                    isSelected: year == highlightedYear && month == selectedMonth,
                     identifier: "month-picker.month.\(month)"
                 ) {
+                    selectedYear = year
                     selectedMonth = month
-                    commit(year: selectedYear, month: month)
+                    commit(year: year, month: month)
                 }
             }
         }
-        .accessibilityIdentifier("month-picker.month-grid")
+        .pagingAccessibilityIdentifier("month-picker.month-grid")
     }
 
-    private var yearGrid: some View {
+    private func yearGrid(pageStart: Int) -> some View {
         LazyVGrid(columns: columns, spacing: gridSpacing) {
-            ForEach(yearPageStart..<(yearPageStart + 12), id: \.self) { year in
+            ForEach(pageStart..<(pageStart + 12), id: \.self) { year in
                 selectionButton(
                     title: String(year),
                     isSelected: year == selectedYear,
@@ -193,7 +220,7 @@ private struct MonthPickerView: View {
                 }
             }
         }
-        .accessibilityIdentifier("month-picker.year-grid")
+        .pagingAccessibilityIdentifier("month-picker.year-grid")
     }
 
     @ViewBuilder
@@ -230,22 +257,6 @@ private struct MonthPickerView: View {
             .buttonStyle(.plain)
             .accessibilityIdentifier("month-picker.back-to-months")
         }
-    }
-
-    private var horizontalPagingGesture: some Gesture {
-        DragGesture(minimumDistance: 30)
-            .onEnded { value in
-                let horizontalDistance = value.translation.width
-                guard abs(horizontalDistance) > abs(value.translation.height),
-                      abs(horizontalDistance) >= 40 else { return }
-                withAnimation(.snappy(duration: 0.22)) {
-                    if mode == .month {
-                        selectedYear += horizontalDistance < 0 ? 1 : -1
-                    } else {
-                        yearPageStart += horizontalDistance < 0 ? 12 : -12
-                    }
-                }
-            }
     }
 
     private var columns: [GridItem] {
@@ -320,7 +331,7 @@ private struct MonthPickerView: View {
                 )
         }
         .buttonStyle(.plain)
-        .accessibilityIdentifier(identifier)
+        .pagingAccessibilityIdentifier(identifier)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
