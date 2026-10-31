@@ -66,10 +66,12 @@ public struct YoloLedgerRootView: View {
         .onChange(of: selectedEntry?.id) { _, _ in presentPendingScreenshotIfReady() }
         #if os(iOS)
         .fullScreenCover(isPresented: $showsNewEntry) { EntryEditorView(model: model, initialDate: newEntryDate) }
-        .fullScreenCover(item: $screenshotProposalToConfirm, onDismiss: {
+        .fullScreenCover(isPresented: screenshotConfirmationIsPresented, onDismiss: {
             pendingScreenshotProposal = nil
-        }) { proposal in
-            EntryEditorView(model: model, proposal: proposal)
+        }) {
+            if let proposal = screenshotProposalToConfirm {
+                EntryEditorView(model: model, proposal: proposal).id(proposal.id)
+            }
         }
         #else
         .sheet(isPresented: $showsNewEntry) { EntryEditorView(model: model, initialDate: newEntryDate) }
@@ -78,13 +80,23 @@ public struct YoloLedgerRootView: View {
     }
 
     private func presentPendingScreenshotIfReady() {
-        guard model.hasLoaded,
-              !showsNewEntry,
-              selectedEntry == nil,
-              screenshotProposalToConfirm == nil,
-              let pendingScreenshotProposal
-        else { return }
-        screenshotProposalToConfirm = pendingScreenshotProposal
+        guard let replacement = ScreenshotProposalPresentation.replacement(
+            pending: pendingScreenshotProposal,
+            current: screenshotProposalToConfirm,
+            hasLoaded: model.hasLoaded,
+            isCreatingManualEntry: showsNewEntry,
+            hasSelectedEntry: selectedEntry != nil
+        ) else { return }
+        screenshotProposalToConfirm = replacement
+    }
+
+    private var screenshotConfirmationIsPresented: Binding<Bool> {
+        Binding(
+            get: { screenshotProposalToConfirm != nil },
+            set: { isPresented in
+                if !isPresented { screenshotProposalToConfirm = nil }
+            }
+        )
     }
 
     private var navigation: some View {
@@ -173,6 +185,24 @@ public struct YoloLedgerRootView: View {
             case .settings: LedgerProfileView(model: model)
             }
         }
+    }
+}
+
+enum ScreenshotProposalPresentation {
+    static func replacement(
+        pending: LedgerScreenshotProposal?,
+        current: LedgerScreenshotProposal?,
+        hasLoaded: Bool,
+        isCreatingManualEntry: Bool,
+        hasSelectedEntry: Bool
+    ) -> LedgerScreenshotProposal? {
+        guard hasLoaded,
+              !isCreatingManualEntry,
+              !hasSelectedEntry,
+              let pending,
+              pending.id != current?.id
+        else { return nil }
+        return pending
     }
 }
 

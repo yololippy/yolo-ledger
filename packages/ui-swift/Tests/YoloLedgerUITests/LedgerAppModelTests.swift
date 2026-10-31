@@ -6,6 +6,46 @@ import YoloLedgerCore
 @MainActor
 struct LedgerAppModelTests {
     @Test
+    func secondScreenshotProposalReplacesTheOpenConfirmation() {
+        let first = screenshotProposal(amount: 15_700, merchant: "天津爱康")
+        let second = screenshotProposal(amount: 3_922, merchant: "哆哆网咖")
+
+        #expect(ScreenshotProposalPresentation.replacement(
+            pending: first,
+            current: nil,
+            hasLoaded: true,
+            isCreatingManualEntry: false,
+            hasSelectedEntry: false
+        ) == first)
+        #expect(ScreenshotProposalPresentation.replacement(
+            pending: second,
+            current: first,
+            hasLoaded: true,
+            isCreatingManualEntry: false,
+            hasSelectedEntry: false
+        ) == second)
+        #expect(ScreenshotProposalPresentation.replacement(
+            pending: second,
+            current: second,
+            hasLoaded: true,
+            isCreatingManualEntry: false,
+            hasSelectedEntry: false
+        ) == nil)
+    }
+
+    private func screenshotProposal(amount: Int64, merchant: String) -> LedgerScreenshotProposal {
+        LedgerScreenshotProposal(
+            amountMinorUnits: amount,
+            merchant: merchant,
+            transactionDate: Date(),
+            kind: .expense,
+            suggestedCategoryName: "其它",
+            recognizedText: merchant,
+            confidence: .high
+        )
+    }
+
+    @Test
     func initialLoadUsesRepositoryAndCanRetryFailure() async {
         let repository = TestLedgerRepository()
         await repository.setReadFailure(true)

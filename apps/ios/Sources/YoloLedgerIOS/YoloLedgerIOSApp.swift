@@ -27,10 +27,17 @@ private struct YoloLedgerIOSRoot: View {
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: ScreenshotImportStore.pendingDidChange)) { _ in
-            pendingScreenshotProposal = ScreenshotImportStore.load()
+            reloadPendingScreenshot()
         }
         .onChange(of: pendingScreenshotProposal?.id) { _, proposalID in
             if proposalID == nil { ScreenshotImportStore.clear() }
         }
+    }
+
+    private func reloadPendingScreenshot() {
+        guard let proposal = ScreenshotImportStore.load(),
+              proposal.id != pendingScreenshotProposal?.id
+        else { return }
+        pendingScreenshotProposal = proposal
     }
 }

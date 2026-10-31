@@ -26,7 +26,7 @@ struct ScreenshotLedgerIntent: AppIntent {
             throw ScreenshotLedgerIntentError.imageTooLarge
         }
         let proposal = try await ScreenshotTextRecognizer.recognize(imageData: screenshot.data)
-        try ScreenshotImportStore.save(proposal)
+        try await ScreenshotImportStore.save(proposal)
         return .result()
     }
 }
@@ -89,6 +89,7 @@ enum ScreenshotImportStore {
     private static let pendingKey = "pending-screenshot-entry-v1"
     static let pendingDidChange = Notification.Name("YoloLedgerPendingScreenshotDidChange")
 
+    @MainActor
     static func save(_ proposal: LedgerScreenshotProposal) throws {
         do {
             UserDefaults.standard.set(try JSONEncoder().encode(proposal), forKey: pendingKey)
