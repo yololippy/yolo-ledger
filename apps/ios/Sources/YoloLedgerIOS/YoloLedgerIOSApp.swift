@@ -29,6 +29,7 @@ private struct YoloLedgerIOSRoot: View {
             bootstrap: bootstrap,
             pendingScreenshotProposal: $pendingScreenshotProposal
         )
+        .preferredColorScheme(.light)
         .onChange(of: scenePhase) { _, phase in
             if phase == .active, let proposal = ScreenshotImportStore.load() {
                 pendingScreenshotProposal = proposal

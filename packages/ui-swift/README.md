@@ -11,8 +11,8 @@ Swift module / library：`YoloLedgerUI`，仅依赖本地 `YoloLedgerCore`。
 ## 主题架构
 
 - 所有共享页面、组件和代码绘制插画均从 SwiftUI 环境读取 `LedgerTheme`，页面文件内不保存 RGB 色值。
-- [LedgerThemeValues.swift](Sources/YoloLedgerUI/LedgerThemeValues.swift) 集中定义语义色和当前 `.pastel` 主题；新增暗黑模式或其他主题时增加一个主题预设即可。
-- App 组装层通过 `.ledgerTheme(.pastel)` 注入当前主题，未来可在这里跟随系统外观或用户设置切换，不需要逐页改颜色。
+- [LedgerThemeValues.swift](Sources/YoloLedgerUI/LedgerThemeValues.swift) 集中定义语义色和当前 `.pastel` 主题；未来新增暗黑模式或其他主题时，只需增加主题预设并调整平台外观策略。
+- App 组装层通过 `.ledgerTheme(.pastel)` 注入当前主题。现阶段 iPhone 明确锁定浅色外观，系统键盘同样使用浅色样式；未来完成暗黑主题设计后再开放跟随系统或用户设置切换，不需要逐页改颜色。
 - 当前底部导航、数字键盘和账目详情的大面积背景统一使用粉彩浅蓝 `#C6E2FF`；亮系统蓝仍用于 tint 与选中态，橙色保留为关键动作色。
 
 - iPhone 使用固定底栏：明细、账单、中央加号、账本、我的。Mac 使用同色系桌面侧栏，支持 Cmd+N 和保存默认键盘动作。
