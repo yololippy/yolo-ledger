@@ -12,7 +12,11 @@ let package = Package(
     ],
     targets: [
         .target(name: "YoloLedgerCore"),
-        .testTarget(name: "YoloLedgerCoreTests", dependencies: ["YoloLedgerCore"]),
+        .testTarget(
+            name: "YoloLedgerCoreTests",
+            dependencies: ["YoloLedgerCore"],
+            resources: [.copy("Fixtures")]
+        ),
     ],
     swiftLanguageModes: [.v6]
 )

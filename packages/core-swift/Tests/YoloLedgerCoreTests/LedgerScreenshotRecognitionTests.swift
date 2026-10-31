@@ -49,10 +49,10 @@ struct LedgerScreenshotRecognitionTests {
         #expect(proposal.suggestedCategoryName == "其他收入")
     }
 
-    @Test func shoppingOrderRefundServicesRemainExpenseAndMerchantBecomesNote() {
+    @Test func providedDickiesOrderRecognizesFinalPaymentAndMerchant() {
         let proposal = LedgerScreenshotParser.parse(lines: [
             .init(text: "支付成功"),
-            .init(text: "示例服饰旗舰店", height: 0.04),
+            .init(text: "Dickies简约旗舰店", height: 0.04),
             .init(text: "秋冬加绒长裤 ¥259"),
             .init(text: "极速退款"),
             .init(text: "店铺优惠 -¥40"),
@@ -64,11 +64,11 @@ struct LedgerScreenshotRecognitionTests {
 
         #expect(proposal.amountMinorUnits == 14_519)
         #expect(proposal.kind == .expense)
-        #expect(proposal.merchant == "示例服饰旗舰店")
+        #expect(proposal.merchant == "Dickies简约旗舰店")
         #expect(proposal.suggestedCategoryName == "购物")
     }
 
-    @Test func storedValuePaymentBeatsZeroCashPaymentAndItemPrice() {
+    @Test func providedTmallOrderUsesStoredValuePaymentInsteadOfZeroCashPayment() {
         let proposal = LedgerScreenshotParser.parse(lines: [
             .init(text: "交易成功"),
             .init(text: "天猫超市", height: 0.04),
@@ -83,6 +83,68 @@ struct LedgerScreenshotRecognitionTests {
         #expect(proposal.kind == .expense)
         #expect(proposal.merchant == "天猫超市")
         #expect(proposal.suggestedCategoryName == "购物")
+    }
+
+    @Test func providedDidiRideRecognizesYuanAmountAndRejectsRefundDifferenceAndAds() throws {
+        let calendar = Calendar(identifier: .gregorian)
+        let now = try #require(calendar.date(from: DateComponents(
+            year: 2026,
+            month: 10,
+            day: 31,
+            hour: 8
+        )))
+        let proposal = LedgerScreenshotParser.parse(lines: [
+            .init(text: "车主正在送你", confidence: 0.3, height: 0.02),
+            .init(text: "滴滴持续守护您的行程安全", confidence: 0.5, height: 0.02),
+            .init(text: "今天 08:05 出发 | 2人 | 独享", confidence: 0.3, height: 0.016),
+            .init(text: "预付车费比实际车费多1.9元，将在行程结束后退款", confidence: 1, height: 0.017),
+            .init(text: "17.1元", confidence: 0.3, height: 0.033),
+            .init(text: "成为顺风车车主", confidence: 1, height: 0.026),
+            .init(text: "首单奖励100元", confidence: 0.5, height: 0.035),
+            .init(text: "搬家358券包", confidence: 0.3, height: 0.041),
+        ], now: now, calendar: calendar)
+
+        #expect(proposal.amountMinorUnits == 1_710)
+        #expect(proposal.kind == .expense)
+        #expect(proposal.merchant == "滴滴顺风车")
+        #expect(proposal.suggestedCategoryName == "交通")
+        let date = try #require(proposal.transactionDate)
+        #expect(calendar.component(.year, from: date) == 2026)
+        #expect(calendar.component(.month, from: date) == 10)
+        #expect(calendar.component(.day, from: date) == 31)
+        #expect(calendar.component(.hour, from: date) == 8)
+        #expect(calendar.component(.minute, from: date) == 5)
+    }
+
+    @Test func splitMerchantLabelAndSignedAmountRecognizeHealthPayment() throws {
+        let calendar = Calendar(identifier: .gregorian)
+        let now = try #require(calendar.date(from: DateComponents(
+            year: 2026,
+            month: 10,
+            day: 31,
+            hour: 9
+        )))
+        let proposal = LedgerScreenshotParser.parse(lines: [
+            .init(text: "天津爱康互联网信息服务有限公司", confidence: 1, height: 0.020),
+            .init(text: "-157.00", confidence: 0.5, height: 0.037),
+            .init(text: "当前状态"),
+            .init(text: "支付成功"),
+            .init(text: "支付时间"),
+            .init(text: "2026年10月31日 08:27:53"),
+            .init(text: "商品"),
+            .init(text: "CMB_HQBAR_CODE157.00"),
+            .init(text: "商户全称"),
+            .init(text: "天津爱康互联网信息服务有限公司"),
+        ], now: now, calendar: calendar)
+
+        #expect(proposal.amountMinorUnits == 15_700)
+        #expect(proposal.kind == .expense)
+        #expect(proposal.merchant == "天津爱康互联网信息服务有限公司")
+        #expect(proposal.suggestedCategoryName == "医疗")
+        let date = try #require(proposal.transactionDate)
+        #expect(calendar.component(.hour, from: date) == 8)
+        #expect(calendar.component(.minute, from: date) == 27)
+        #expect(calendar.component(.second, from: date) == 53)
     }
 
     @Test func doesNotTreatTimeOrOrderNumberAsAmount() {

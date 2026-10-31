@@ -34,6 +34,7 @@ Swift Package、library product 和模块名均为 `YoloLedgerCore`，目录为 
 - `LedgerRecognizedTextLine` 是平台 OCR 结果的轻量输入；Core 不依赖 Vision 或图片框架。
 - `LedgerScreenshotParser` 从文字行中提取最终金额、商户、交易日期、收支方向与基础分类建议，过滤时间、订单号、优惠和余额等干扰数字。
 - `LedgerScreenshotProposal` 是可编码的待确认结果，只保存结构化文字和候选值，不包含原始截图；iOS App 负责接收图片与调用 Vision。
+- `Tests/YoloLedgerCoreTests/Fixtures/` 保存用户明确要求加入的 7 张原始截图测试夹具；`LedgerScreenshotVisionFixtureTests` 使用与 iOS App 相同的 Vision 配置读取原图并验证完整 OCR → 解析结果。这些资源只属于测试 target，不会打包进 App。
 
 ### 异步仓库
 
@@ -93,7 +94,7 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test --package-pa
 
 Manifest 使用 `swift-tools-version: 6.0`，Swift 语言模式为 6。临时构建基线为 macOS 14 / iOS 17；产品最低支持系统版本仍待 main 确认。
 
-验证记录（2026-10-30）：使用指定 Xcode 的 Swift 6.4 / arm64 环境运行上述测试命令，构建通过，**50 项测试全部通过**。其中 8 项截图识别测试覆盖实付与优惠竞争、储值卡扣款与现金实付为零、普通订单退款服务、商户与分类、真实退款收入、日期／时间／订单号过滤、整数金额和待确认结果编码；原有 42 项继续覆盖金额、表达式、汇总、本地日期范围、DST、关联校验和分类种子。
+验证记录（2026-10-31）：使用指定 Xcode 的 Swift 6.4 / arm64 环境运行上述测试命令，构建通过，**59 项测试全部通过**。其中 10 项脱敏文字规则测试覆盖实付与优惠竞争、储值卡扣款与现金实付为零、普通订单退款服务、商户与分类、真实退款收入、日期／时间／订单号过滤、整数金额、待确认结果编码、行程截图中的“数字 + 元”、退款差额、广告金额和“今天 HH:mm”，以及银行账单中的负号金额与分行商户字段；另有 7 项原图 Vision 集成测试逐张验证滴滴、天猫超市、Dickies、爱康账单、网咖账单、京东订单和网约车截图的完整识别结果；原有 42 项继续覆盖金额、表达式、汇总、本地日期范围、DST、关联校验和分类种子。
 
 ## 后续业务约定
 

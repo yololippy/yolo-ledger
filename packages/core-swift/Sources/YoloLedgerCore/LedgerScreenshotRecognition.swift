@@ -72,7 +72,10 @@ public enum LedgerScreenshotParser {
     private static let summaryAmountKeywords = ["实付款", "实际付款", "实际支付", "付款总额"]
     private static let storedValuePaymentKeywords = ["超市卡", "礼品卡", "储值卡", "购物卡"]
     private static let secondaryAmountKeywords = ["支付成功", "付款成功", "交易成功", "退款成功", "已支付", "已收款"]
-    private static let distractingAmountKeywords = ["优惠", "折扣", "红包", "积分", "余额", "手续费", "原价", "剩余"]
+    private static let distractingAmountKeywords = [
+        "优惠", "折扣", "红包", "积分", "余额", "手续费", "原价", "剩余",
+        "奖励", "返现", "优惠券", "券包"
+    ]
     private static let nonMerchantKeywords = [
         "支付成功", "付款成功", "交易成功", "退款成功", "账单详情", "交易详情", "订单详情", "收支明细",
         "支付方式", "交易时间", "付款时间", "订单号", "交易单号", "商户单号", "当前状态", "微信支付", "支付宝",
@@ -134,14 +137,20 @@ public enum LedgerScreenshotParser {
             for token in amountTokens(in: line.text) {
                 guard let minorUnits = parsedMinorUnitsAllowingZero(token.value) else { continue }
                 var score = Double(line.confidence) * 20 + min(line.height * 160, 35)
-                if token.hasCurrencySymbol { score += 45 }
+                if token.hasAmountMarker { score += 45 }
                 if token.value.contains(".") { score += 8 }
+                if containsAny(token.localContext, ["合计", "实付", "实际支付", "支付金额", "付款金额"]) { score += 90 }
+                if containsAny(token.localContext, ["共减", "共減", "共省", "立减", "立減"]) { score -= 120 }
                 if containsAny(line.text, summaryAmountKeywords) { score += 220 }
                 else if containsAny(line.text, finalAmountKeywords) { score += 135 }
                 else if containsAny(line.text, amountKeywords) { score += 75 }
                 if containsInLineOrNearby(lines, index: index, keywords: storedValuePaymentKeywords) { score += 100 }
                 if containsAny(line.text, secondaryAmountKeywords) { score += 35 }
                 if containsAny(line.text, distractingAmountKeywords) { score -= 60 }
+                if containsAny(line.text, ["多", "少", "差额"]),
+                   containsAny(line.text, ["退款", "退回", "补收"]) {
+                    score -= 140
+                }
                 for distance in 1...2 {
                     for nearbyIndex in [index - distance, index + distance] where lines.indices.contains(nearbyIndex) {
                         if containsAny(lines[nearbyIndex].text, amountKeywords) {
@@ -190,8 +199,8 @@ public enum LedgerScreenshotParser {
         return false
     }
 
-    private static func amountTokens(in text: String) -> [(value: String, hasCurrencySymbol: Bool)] {
-        let pattern = #"(?:[¥￥]\s*)?([0-9]{1,9}(?:[.,][0-9]{1,2})?)"#
+    private static func amountTokens(in text: String) -> [(value: String, hasAmountMarker: Bool, localContext: String)] {
+        let pattern = #"(?:[¥￥]\s*)?([0-9]{1,9}(?:[.,][0-9]{1,2})?)(?:\s*元)?"#
         guard let expression = try? NSRegularExpression(pattern: pattern) else { return [] }
         let range = NSRange(text.startIndex..., in: text)
         return expression.matches(in: text, range: range).compactMap { match in
@@ -201,7 +210,16 @@ public enum LedgerScreenshotParser {
             let whole = String(text[wholeRange])
             let value = String(text[valueRange]).replacingOccurrences(of: ",", with: ".")
             guard !looksLikeDateOrTime(value: value, whole: whole, matchRange: match.range(at: 0), in: text) else { return nil }
-            return (value, whole.contains("¥") || whole.contains("￥"))
+            let prefix = text[..<wholeRange.lowerBound].trimmingCharacters(in: .whitespaces)
+            let hasExplicitSign = prefix.last == "-" || prefix.last == "+"
+            let prefixLength = min(8, text.distance(from: text.startIndex, to: wholeRange.lowerBound))
+            let contextStart = text.index(wholeRange.lowerBound, offsetBy: -prefixLength)
+            let localContext = String(text[contextStart..<wholeRange.upperBound])
+            return (
+                value,
+                whole.contains("¥") || whole.contains("￥") || whole.contains("元") || hasExplicitSign,
+                localContext
+            )
         }
     }
 
@@ -235,13 +253,34 @@ public enum LedgerScreenshotParser {
     }
 
     private static func inferredMerchant(from lines: [LedgerRecognizedTextLine], amountLineIndex: Int?) -> String? {
-        let labels = ["商户", "收款方", "付款给", "交易对象", "对方", "商品"]
-        for line in lines {
+        let joined = lines.map(\.text).joined(separator: "\n")
+        if containsAny(joined, ["滴滴"]),
+           containsAny(joined, ["车费", "行程", "车主正在送你", "接单"]) {
+            return containsAny(joined, ["顺风车", "独享"]) ? "滴滴顺风车" : "滴滴出行"
+        }
+        if containsAny(joined, ["特惠快车", "呼叫返程"]),
+           containsAny(joined, ["联系司机", "费用说明", "全程"]) {
+            return "滴滴出行"
+        }
+
+        let labels = ["商户全称", "收款方全称", "商户", "收款方", "付款给", "交易对象", "对方", "店铺"]
+        let emptyLabelValues = ["", "全称", "名称", "信息"]
+        for (index, line) in lines.enumerated() {
             for label in labels where line.text.contains(label) {
-                let value = line.text
+                if label == "店铺",
+                   line.text != label,
+                   !line.text.hasPrefix("店铺:"),
+                   !line.text.hasPrefix("店铺：") {
+                    continue
+                }
+                let value = cleanedMerchantValue(line.text
                     .replacingOccurrences(of: label, with: "")
-                    .trimmingCharacters(in: CharacterSet(charactersIn: "：: -"))
-                if isUsefulMerchant(value) { return value }
+                    .trimmingCharacters(in: CharacterSet(charactersIn: "：: -")))
+                if !emptyLabelValues.contains(value), isUsefulMerchant(value) { return value }
+                if emptyLabelValues.contains(value), lines.indices.contains(index + 1) {
+                    let nextValue = cleanedMerchantValue(lines[index + 1].text)
+                    if isUsefulMerchant(nextValue) { return nextValue }
+                }
             }
         }
 
@@ -264,12 +303,25 @@ public enum LedgerScreenshotParser {
 
     private static func isUsefulMerchant(_ value: String) -> Bool {
         guard value.count >= 2, value.count <= 40,
+              !value.contains("*"),
+              !value.contains("＊"),
               !containsAny(value, nonMerchantKeywords),
               !containsAny(value, amountKeywords),
               amountTokens(in: value).isEmpty,
               value.rangeOfCharacter(from: .letters) != nil
         else { return false }
         return true
+    }
+
+    private static func cleanedMerchantValue(_ rawValue: String) -> String {
+        var value = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        if value.hasPrefix("回 ") { value.removeFirst(2) }
+        if let range = value.range(of: "京东"), range.lowerBound != value.startIndex {
+            value = String(value[..<range.lowerBound])
+        }
+        return value.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines.union(
+            CharacterSet(charactersIn: ".…＞>")
+        ))
     }
 
     private static func inferredCategory(from text: String, merchant: String?, kind: LedgerEntryKind) -> String? {
@@ -288,7 +340,7 @@ public enum LedgerScreenshotParser {
             ("零食", ["零食", "便利店"]),
             ("旅行", ["酒店", "机票", "旅行", "景区", "民宿"]),
             ("通讯", ["话费", "流量", "通信", "宽带"]),
-            ("医疗", ["医院", "诊所", "药房", "医药"]),
+            ("医疗", ["医院", "诊所", "药房", "医药", "爱康", "体检", "导检", "健康管理"]),
             ("礼金", ["礼金", "红包"]),
             ("运动", ["健身", "运动", "球馆"]),
             ("日用", ["超市", "日用", "百货"]),
@@ -297,6 +349,24 @@ public enum LedgerScreenshotParser {
     }
 
     private static func inferredDate(from lines: [String], now: Date, calendar: Calendar) -> Date? {
+        let todayPattern = #"今天\s*([0-9]{1,2}):([0-9]{2})"#
+        if let expression = try? NSRegularExpression(pattern: todayPattern) {
+            for line in lines {
+                let range = NSRange(line.startIndex..., in: line)
+                guard let match = expression.firstMatch(in: line, range: range),
+                      let hourRange = Range(match.range(at: 1), in: line),
+                      let minuteRange = Range(match.range(at: 2), in: line),
+                      let hour = Int(line[hourRange]),
+                      let minute = Int(line[minuteRange])
+                else { continue }
+                var components = calendar.dateComponents([.year, .month, .day], from: now)
+                components.hour = hour
+                components.minute = minute
+                components.second = 0
+                if let date = calendar.date(from: components) { return date }
+            }
+        }
+
         let patterns = [
             "yyyy-MM-dd HH:mm:ss", "yyyy-MM-dd HH:mm", "yyyy/MM/dd HH:mm:ss", "yyyy/MM/dd HH:mm",
             "yyyy.MM.dd HH:mm:ss", "yyyy.MM.dd HH:mm", "yyyy年M月d日 HH:mm:ss", "yyyy年M月d日 HH:mm",
