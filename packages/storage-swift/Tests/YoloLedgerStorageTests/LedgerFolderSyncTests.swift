@@ -276,6 +276,35 @@ struct LedgerFolderSyncTests {
         let reopenedB = try SwiftDataLedgerRepository(storeURL: fixture.storeBURL)
         #expect(try await reopenedB.fetchEntries().map(\.id) == [entryID])
     }
+
+    @Test func legacyFormatOneSnapshotRemainsImportableAfterSchemaUpgrade() async throws {
+        let fixture = FolderSyncTestFixture()
+        defer { fixture.remove() }
+        let sourceDeviceID = UUID()
+        let entryID = UUID()
+        let current = singleEntrySnapshot(
+            deviceID: sourceDeviceID,
+            entryID: entryID,
+            note: "旧同步格式",
+            updatedAt: Date(timeIntervalSince1970: 1_800_000_000)
+        )
+        let legacy = LedgerFolderSnapshot(
+            formatVersion: 1,
+            schemaVersion: "1.1.0",
+            deviceID: current.deviceID,
+            generatedAt: current.generatedAt,
+            books: current.books,
+            categories: current.categories,
+            entries: current.entries
+        )
+        try LedgerFolderSnapshotIO.write(legacy, to: fixture.exchangeURL)
+
+        let repository = try SwiftDataLedgerRepository(storeURL: fixture.storeAURL)
+        _ = try await repository.synchronize(folderURL: fixture.exchangeURL, deviceID: UUID())
+        let imported = try #require(try await repository.fetchEntries().first { $0.id == entryID })
+        #expect(imported.note == "旧同步格式")
+        #expect(imported.importMetadata == nil)
+    }
 }
 
 private struct FolderSyncTestFixture {
@@ -306,9 +335,9 @@ private func syncDraft(amount: Int64, note: String) -> LedgerEntryDraft {
 }
 
 @MainActor
-private func allEntryRecords(at storeURL: URL) throws -> [LedgerSchemaV1.EntryRecord] {
+private func allEntryRecords(at storeURL: URL) throws -> [LedgerSchemaV2.EntryRecord] {
     let container = try LocalLedgerStore.makeContainer(at: storeURL)
-    return try ModelContext(container).fetch(FetchDescriptor<LedgerSchemaV1.EntryRecord>())
+    return try ModelContext(container).fetch(FetchDescriptor<LedgerSchemaV2.EntryRecord>())
 }
 
 private func snapshotBase(deviceID: UUID, entries: [LedgerFolderSnapshot.Entry]) -> LedgerFolderSnapshot {

@@ -8,6 +8,46 @@ public enum LedgerEntryKind: String, CaseIterable, Codable, Sendable {
 public enum LedgerEntrySource: String, Codable, Sendable {
     case manual
     case screenshotShortcut
+    case meowLedgerImport
+}
+
+public enum LedgerEntryImportFormat: String, Codable, Sendable {
+    case meowLedgerCSVV1 = "meow-ledger-csv-v1"
+}
+
+/// Lossless source metadata retained after an imported row becomes a ledger entry.
+public struct LedgerEntryImportMetadata: Equatable, Codable, Sendable {
+    public let format: LedgerEntryImportFormat
+    public let deduplicationKey: String
+    public let originalCategory: String
+    public let originalTimestamp: String
+    public let originalAmount: String
+    public let originalAccount: String
+    public let originalBook: String
+    public let originalCurrency: String
+    public let originalNote: String
+
+    public init(
+        format: LedgerEntryImportFormat,
+        deduplicationKey: String,
+        originalCategory: String,
+        originalTimestamp: String,
+        originalAmount: String,
+        originalAccount: String,
+        originalBook: String,
+        originalCurrency: String,
+        originalNote: String
+    ) {
+        self.format = format
+        self.deduplicationKey = deduplicationKey
+        self.originalCategory = originalCategory
+        self.originalTimestamp = originalTimestamp
+        self.originalAmount = originalAmount
+        self.originalAccount = originalAccount
+        self.originalBook = originalBook
+        self.originalCurrency = originalCurrency
+        self.originalNote = originalNote
+    }
 }
 
 public struct LedgerCategory: Identifiable, Equatable, Sendable {
@@ -31,6 +71,7 @@ public struct LedgerEntryDraft: Equatable, Sendable {
     public let date: Date
     public let note: String
     public let source: LedgerEntrySource
+    public let importMetadata: LedgerEntryImportMetadata?
 
     public init(
         bookID: UUID,
@@ -39,7 +80,8 @@ public struct LedgerEntryDraft: Equatable, Sendable {
         amount: LedgerAmount,
         date: Date,
         note: String = "",
-        source: LedgerEntrySource = .manual
+        source: LedgerEntrySource = .manual,
+        importMetadata: LedgerEntryImportMetadata? = nil
     ) {
         self.bookID = bookID
         self.categoryID = categoryID
@@ -48,6 +90,7 @@ public struct LedgerEntryDraft: Equatable, Sendable {
         self.date = date
         self.note = note
         self.source = source
+        self.importMetadata = importMetadata
     }
 }
 
@@ -60,6 +103,7 @@ public struct LedgerEntry: Identifiable, Equatable, Sendable {
     public let date: Date
     public let note: String
     public let source: LedgerEntrySource
+    public let importMetadata: LedgerEntryImportMetadata?
     public let createdAt: Date
     public let updatedAt: Date
 
@@ -72,6 +116,7 @@ public struct LedgerEntry: Identifiable, Equatable, Sendable {
         self.date = draft.date
         self.note = draft.note
         self.source = draft.source
+        self.importMetadata = draft.importMetadata
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }
@@ -84,7 +129,8 @@ public struct LedgerEntry: Identifiable, Equatable, Sendable {
             amount: amount,
             date: date,
             note: note,
-            source: source
+            source: source,
+            importMetadata: importMetadata
         )
     }
 }

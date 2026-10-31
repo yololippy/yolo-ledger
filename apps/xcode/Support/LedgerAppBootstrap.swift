@@ -14,6 +14,7 @@ final class LedgerAppBootstrap {
     private(set) var repository: (any LedgerRepository)?
     private(set) var folderSyncCoordinator: LedgerFolderSyncCoordinator?
     let folderSyncController = LedgerFolderSyncController()
+    let meowImportController = LedgerMeowImportController()
     private(set) var failure: String?
     private(set) var isOpening = false
     #if DEBUG
@@ -35,6 +36,29 @@ final class LedgerAppBootstrap {
             #endif
             let repository = try SwiftDataLedgerRepository(storeURL: storeURL, syncMode: .local)
             self.repository = repository
+            let importHandler = repository.makeMeowImportHandler()
+            meowImportController.installImportAction { [folderSyncController] plans in
+                let report = try await importHandler(plans)
+                folderSyncController.localDataDidChange()
+                return LedgerMeowImportResult(
+                    importedRecordCount: report.importedEntryCount,
+                    skippedDuplicateRecordCount: report.skippedDuplicateCount,
+                    createdBookCount: report.createdBookCount,
+                    createdCategoryCount: report.createdCategoryCount,
+                    importedExpenseCount: report.importedExpenseCount,
+                    importedIncomeCount: report.importedIncomeCount,
+                    importedExpenseTotalText: Self.currencyText(report.importedExpenseTotalMinorUnits),
+                    importedIncomeTotalText: Self.currencyText(report.importedIncomeTotalMinorUnits),
+                    backupName: report.backupURL.lastPathComponent
+                )
+            }
+            #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("--ui-test-meow-import") {
+                meowImportController.installDocumentSelectionAction {
+                    Self.meowImportUITestDocuments
+                }
+            }
+            #endif
             if isUITestStore {
                 folderSyncController.update(folderName: nil, state: .notConfigured)
             } else {
@@ -75,6 +99,42 @@ final class LedgerAppBootstrap {
         false
         #endif
     }
+
+    private static func currencyText(_ minorUnits: Decimal) -> String {
+        var majorUnits = minorUnits
+        majorUnits /= 100
+        let formatter = NumberFormatter()
+        formatter.locale = Locale(identifier: "zh_CN")
+        formatter.numberStyle = .decimal
+        formatter.minimumFractionDigits = 2
+        formatter.maximumFractionDigits = 2
+        formatter.usesGroupingSeparator = true
+        return "¥" + (formatter.string(from: NSDecimalNumber(decimal: majorUnits)) ?? "0.00")
+    }
+
+    #if DEBUG
+    private static var meowImportUITestDocuments: [LedgerMeowImportDocument] {
+        let header = "分类,时间,金额,账户,账本,货币,备注"
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.calendar = .current
+        formatter.timeZone = .current
+        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        let timestamp = formatter.string(from: Date())
+        let expense = "餐饮,\(timestamp),-12.50,现金,日常,CNY,脱敏午餐"
+        let income = "工资,\(timestamp),+1000.00,银行卡,日常,CNY,脱敏工资"
+        return [
+            LedgerMeowImportDocument(
+                name: "脱敏样本一.csv",
+                data: Data("\(header)\n\(expense)".utf8)
+            ),
+            LedgerMeowImportDocument(
+                name: "脱敏样本二.csv",
+                data: Data("\(header)\n\(income)\n\(expense)".utf8)
+            ),
+        ]
+    }
+    #endif
 }
 
 private enum LaunchError: LocalizedError {
@@ -106,7 +166,8 @@ struct LedgerAppContent: View {
                 YoloLedgerRootView(
                     repository: repository,
                     pendingScreenshotProposal: $pendingScreenshotProposal,
-                    folderSync: bootstrap.folderSyncController
+                    folderSync: bootstrap.folderSyncController,
+                    meowImport: bootstrap.meowImportController
                 )
             } else if let failure = bootstrap.failure {
                 ContentUnavailableView {

@@ -7,6 +7,14 @@ final class LedgerSeedDataTests: XCTestCase {
         UUID(uuidString: "A20E127A-36F6-401A-A6E3-" + suffix)!
     }
 
+    func testDefaultBookUsesTheCanonicalNameAndStableIdentifier() {
+        XCTAssertEqual(LedgerSeedData.defaultBook, LedgerBook(
+            id: id("000000000001"),
+            name: "默认账本"
+        ))
+        XCTAssertEqual(LedgerSeedData.books, [LedgerSeedData.defaultBook])
+    }
+
     func testExpenseOrderMatchesProvidedScreenshotAndKeepsDailyUseLast() {
         let expenses = LedgerSeedData.categories.filter { $0.kind == .expense }
         XCTAssertEqual(expenses.map(\.name), [

@@ -17,6 +17,7 @@ private enum LedgerDestination: String, CaseIterable, Identifiable {
 public struct YoloLedgerRootView: View {
     @State private var model: LedgerAppModel
     private let folderSync: LedgerFolderSyncController?
+    private let meowImport: LedgerMeowImportController?
     @Binding private var pendingScreenshotProposal: LedgerScreenshotProposal?
     @State private var selection: LedgerDestination = .details
     @State private var showsNewEntry = false
@@ -28,9 +29,11 @@ public struct YoloLedgerRootView: View {
 
     public init(
         repository: any LedgerRepository,
-        folderSync: LedgerFolderSyncController? = nil
+        folderSync: LedgerFolderSyncController? = nil,
+        meowImport: LedgerMeowImportController? = nil
     ) {
         self.folderSync = folderSync
+        self.meowImport = meowImport
         _model = State(initialValue: LedgerAppModel(
             repository: repository,
             onLocalMutation: { folderSync?.localDataDidChange() }
@@ -41,9 +44,11 @@ public struct YoloLedgerRootView: View {
     public init(
         repository: any LedgerRepository,
         pendingScreenshotProposal: Binding<LedgerScreenshotProposal?>,
-        folderSync: LedgerFolderSyncController? = nil
+        folderSync: LedgerFolderSyncController? = nil,
+        meowImport: LedgerMeowImportController? = nil
     ) {
         self.folderSync = folderSync
+        self.meowImport = meowImport
         _model = State(initialValue: LedgerAppModel(
             repository: repository,
             onLocalMutation: { folderSync?.localDataDidChange() }
@@ -77,6 +82,9 @@ public struct YoloLedgerRootView: View {
         .onChange(of: folderSync?.successfulSyncRevision) { _, _ in
             Task { await model.refresh() }
         }
+        .onChange(of: meowImport?.successfulImportRevision) { _, _ in
+            Task { await model.refresh() }
+        }
         .onChange(of: model.hasLoaded) { _, _ in presentPendingScreenshotIfReady() }
         .onChange(of: pendingScreenshotProposal?.id) { _, _ in presentPendingScreenshotIfReady() }
         .onChange(of: showsNewEntry) { _, _ in presentPendingScreenshotIfReady() }
@@ -102,6 +110,26 @@ public struct YoloLedgerRootView: View {
             allowedContentTypes: [.folder]
         ) { result in
             Task { await folderSync?.handleFolderSelection(result) }
+        }
+        .fileImporter(
+            isPresented: Binding(
+                get: { meowImport?.isFileImporterPresented == true },
+                set: { if !$0 { meowImport?.dismissFileImporter() } }
+            ),
+            allowedContentTypes: [.commaSeparatedText],
+            allowsMultipleSelection: true
+        ) { result in
+            Task { await meowImport?.handleFileSelection(result) }
+        }
+        .sheet(
+            isPresented: Binding(
+                get: { meowImport?.isReviewPresented == true },
+                set: { if !$0 { meowImport?.cancelReview() } }
+            )
+        ) {
+            if let meowImport {
+                LedgerMeowImportView(controller: meowImport)
+            }
         }
     }
 
@@ -208,7 +236,7 @@ public struct YoloLedgerRootView: View {
             case .bills, .details:
                 LedgerEntriesView(model: model, isMonthly: selection == .bills) { selectedEntry = $0 }
             case .books: LedgerBooksView(model: model)
-            case .settings: LedgerProfileView(folderSync: folderSync)
+            case .settings: LedgerProfileView(folderSync: folderSync, meowImport: meowImport)
             }
         }
     }
@@ -482,6 +510,7 @@ private struct LedgerProfileView: View {
     @Environment(\.ledgerTheme) private var theme
     @Environment(\.openURL) private var openURL
     let folderSync: LedgerFolderSyncController?
+    let meowImport: LedgerMeowImportController?
     @State private var confirmsStop = false
 
     var body: some View {
@@ -493,6 +522,7 @@ private struct LedgerProfileView: View {
                     VStack(alignment: .leading,spacing: 6) { Text(YoloLedgerProduct.displayName).font(.title2.bold()); Text("把生活，一笔笔留下").font(.caption).foregroundStyle(theme.muted) }
                 }.padding(.vertical, 12)
                 folderSyncCard
+                meowImportCard
                 #if os(iOS)
                 VStack(alignment: .leading, spacing: 16) {
                     Label("轻点两下，截图记账", systemImage: "hand.tap")
@@ -529,6 +559,35 @@ private struct LedgerProfileView: View {
         } message: {
             Text("本机账目会继续保留；文件夹中的交换文件不会被删除。")
         }
+    }
+
+    private var meowImportCard: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Label("从喵喵记账导入", systemImage: "square.and.arrow.down.on.square")
+                .font(.headline)
+            DashedRule()
+            Text("一次选择一个或多个喵喵记账 CSV，先检查汇总和错误，再创建本地备份并导入。")
+                .font(.system(size: 14))
+                .lineSpacing(5)
+                .fixedSize(horizontal: false, vertical: true)
+            Text("不会修改喵喵记账中的数据；CSV 有任何错误时不会写入。")
+                .font(.caption)
+                .foregroundStyle(theme.muted)
+            Button {
+                meowImport?.requestFileSelection()
+            } label: {
+                Label("选择 CSV 文件", systemImage: "doc.badge.plus")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(PaperButtonStyle(fill: theme.primarySoft))
+            .disabled(meowImport == nil || meowImport?.isImporting == true || meowImport?.isReadingFiles == true)
+            .accessibilityIdentifier("settings.meow-import.choose")
+        }
+        .padding(21)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .paperCard()
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("settings.meow-import.card")
     }
 
     @ViewBuilder

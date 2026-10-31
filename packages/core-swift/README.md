@@ -24,10 +24,10 @@ Swift Package、library product 和模块名均为 `YoloLedgerCore`，目录为 
 - 表达式操作数可为零，每项最多两位小数且原始数字最多含一个小数点；纯整数后的尾点按整数额完成，例如 `12.` 等于 `12.00`，`12.+3.` 等于 `15.00`，而 `1.2.`、`1+0.0.` 必须报错。允许中间负数，最终结果必须大于零。
 - 表达式仅忽略整体首尾空白；不接受内部空白、一元正负号、悬空／连续运算符、括号、其他运算符或非法字符。语法错误抛出 `invalidAmountExpression`，操作数或逐步运算溢出抛出 `amountOverflow`，最终零／负数抛出 `nonPositiveAmount`，均有中文错误提示。
 - 表达式以 `Int64` 分执行 checked 加减，不使用浮点或动态求值，也不会为使最终结果可表示而忽略中途溢出。`LedgerAmount(input:)` 保持原有严格规则，仍不接受 `12.` 或表达式。
-- `LedgerEntryKind`：`.expense`、`.income`；`LedgerEntrySource` 包含手动记账 `.manual` 与快捷指令截图记账 `.screenshotShortcut`。
+- `LedgerEntryKind`：`.expense`、`.income`；`LedgerEntrySource` 包含手动记账 `.manual`、快捷指令截图记账 `.screenshotShortcut` 与喵喵记账导入 `.meowLedgerImport`。
 - `LedgerCategory`：`id: UUID`、`name: String`、`kind: LedgerEntryKind`。
-- `LedgerEntryDraft`：`bookID`、`categoryID`、`kind`、`amount`、`date`、`note`、`source`；`note` 默认空字符串，`source` 默认 `.manual`。
-- `LedgerEntry`：上述草稿内容加稳定 `id: UUID`、`createdAt` 和 `updatedAt`。通过 `init(id:draft:createdAt:updatedAt:)` 创建，`draft` 可取回可编辑内容。
+- `LedgerEntryDraft`：`bookID`、`categoryID`、`kind`、`amount`、`date`、`note`、`source` 和可选 `importMetadata`；`note` 默认空字符串，`source` 默认 `.manual`，`importMetadata` 默认 `nil`，现有调用保持兼容。
+- `LedgerEntry`：上述草稿内容加稳定 `id: UUID`、`createdAt` 和 `updatedAt`。通过 `init(id:draft:createdAt:updatedAt:)` 创建，`draft` 可取回可编辑内容及导入元数据。
 
 金额、账本、分类、草稿和记录都是可跨并发边界传递的 `Sendable` 值对象。日期用 `Date` 保存绝对时刻，显示及时间范围按设备当前本地日历计算。
 
@@ -37,6 +37,18 @@ Swift Package、library product 和模块名均为 `YoloLedgerCore`，目录为 
 - `LedgerScreenshotParser` 从文字行中提取最终金额、商户、交易日期、收支方向与基础分类建议，过滤时间、订单号、优惠和余额等干扰数字。
 - `LedgerScreenshotProposal` 是可编码的待确认结果，只保存结构化文字和候选值，不包含原始截图；iOS App 负责接收图片与调用 Vision。
 - `Tests/YoloLedgerCoreTests/Fixtures/` 保存用户明确要求加入的 7 张原始截图测试夹具；`LedgerScreenshotVisionFixtureTests` 使用与 iOS App 相同的 Vision 配置读取原图并验证完整 OCR → 解析结果。这些资源只属于测试 target，不会打包进 App。
+
+### 喵喵记账 CSV 导入契约
+
+`LedgerMeowCSVParser.parse(data:calendar:timeZone:)` 将 UTF-8 CSV 转换为平台无关的 `LedgerMeowImportPlan`：
+
+- 接受文件开头的 UTF-8 BOM、CRLF／LF／CR 换行和 RFC 4180 引号规则，包括字段内逗号、双引号转义及跨行备注；不依赖文件选择器或数据库框架。
+- 表头严格要求依次为“分类、时间、金额、账户、账本、货币、备注”。每条问题通过 `LedgerMeowImportIssue` 返回 CSV 记录的物理起始行、列和错误代码，不把原始账单内容写入错误文本。
+- 时间严格按 `yyyy-MM-dd HH:mm:ss` 解析，并显式使用调用方注入的 `Calendar` 与 `TimeZone`；金额直接转换为精确的 `Int64` 分，负数为支出，正数为收入，非法、零值和溢出均按行拒绝。
+- `LedgerMeowSourceFields` 保留 RFC 4180 解码后的七个原始字段；账户和备注允许为空，分类、时间、金额、账本和货币必须非空。Core 不据此设计账户 UI。
+- `LedgerMeowImportPreview` 提供有效／无效、收支、内容重复、精确金额合计及不同账本／分类／账户／货币数量；单方向合计超出 `Int64` 时对应合计为 `nil`，记录本身仍可预览。
+- `LedgerEntryImportMetadata` 保留源格式、稳定去重键和七个原始字段。相同内容的多条合法记录按其一基出现序号生成不同 SHA-256 键；同一文件重复解析会得到相同键，Storage 可据此跳过已经导入的记录而不误删合法重复账单。
+- Core 只生成导入计划。Storage 负责批量写入、账本／分类映射或创建、持久化元数据、事务回滚和按去重键跳过；Apple 负责文件读取、预览、用户确认和结果展示。
 
 ### 异步仓库
 
@@ -89,7 +101,7 @@ func synchronize(
 
 ### 初始数据与范围
 
-`LedgerSeedData.books` 包含“日常账本”，`defaultBook` 提供其稳定 ID；`categories` 按用户于 2026-10-28 提供的喵喵记账截图补齐支出分类，顺序为：**餐饮、交通、购物、宠物、住房、零食、旅行、通讯、医疗、Pos、其它、礼金、运动**。原有“日用”额外保留在支出末尾，收入仍为工资、奖金、其他收入。截图中的“设置”是分类管理入口，不加入分类种子，也不扩展本轮分类 CRUD。
+`LedgerSeedData.books` 包含“默认账本”，`defaultBook` 提供其稳定 ID；旧版内置“日常账本”由 Storage 的一次性种子迁移合并到“默认账本”。`categories` 按用户于 2026-10-28 提供的喵喵记账截图补齐支出分类，顺序为：**餐饮、交通、购物、宠物、住房、零食、旅行、通讯、医疗、Pos、其它、礼金、运动**。原有“日用”额外保留在支出末尾，收入仍为工资、奖金、其他收入。截图中的“设置”是分类管理入口，不加入分类种子，也不扩展本轮分类 CRUD。
 
 种子 UUID 使用前缀 `A20E127A-36F6-401A-A6E3-` 和下表的 12 位后缀，供 Storage 幂等初始化／升级和 UI 共用：
 
@@ -113,8 +125,8 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test --package-pa
 
 Manifest 使用 `swift-tools-version: 6.0`，Swift 语言模式为 6。临时构建基线为 macOS 14 / iOS 17；产品最低支持系统版本仍待 main 确认。
 
-验证记录（2026-10-31）：使用指定 Xcode 的 Swift 6.4 / arm64 环境运行上述测试命令，构建通过，**62 项测试全部通过**。其中 3 项文件夹同步契约测试覆盖目录 URL 与稳定设备 UUID 的传递、报告值和完整 UI 状态；10 项脱敏文字规则测试覆盖实付与优惠竞争、储值卡扣款与现金实付为零、普通订单退款服务、商户与分类、真实退款收入、日期／时间／订单号过滤、整数金额、待确认结果编码、行程截图中的“数字 + 元”、退款差额、广告金额和“今天 HH:mm”，以及银行账单中的负号金额与分行商户字段；另有 7 项原图 Vision 集成测试逐张验证滴滴、天猫超市、Dickies、爱康账单、网咖账单、京东订单和网约车截图的完整识别结果；原有 42 项继续覆盖金额、表达式、汇总、本地日期范围、DST、关联校验和分类种子。
+验证记录（2026-10-31）：使用指定 Xcode 的 Swift 6.4 / arm64 环境运行上述测试命令，构建通过，**72 项测试全部通过**。其中 8 项脱敏 CSV 导入测试覆盖 BOM、CRLF、RFC 4180 引号／逗号／跨行字段、收支、逐行错误、零值／溢出、注入时区、合法重复记录、稳定去重键和元数据兼容；3 项文件夹同步契约测试覆盖目录 URL 与稳定设备 UUID 的传递、报告值和完整 UI 状态；10 项脱敏文字规则测试与 7 项原图 Vision 集成测试继续覆盖截图识别；其余测试覆盖产品元数据、金额、表达式、汇总、本地日期范围、DST、关联校验、默认账本名称和分类种子。
 
 ## 后续业务约定
 
-手机端采用手机当前系统本地时区计算日期范围和定时规则；独立运行的 Mac 按同样原则使用本机系统时区。定时规则的具体行为由产品需求确定；跨设备幂等随 M4 在现有 iCloud 同步基础上设计。
+手机端采用手机当前系统本地时区计算日期范围和定时规则；独立运行的 Mac 按同样原则使用本机系统时区。定时规则的具体行为由产品需求确定；跨设备幂等随 M4 在现有用户选定文件夹同步基础上设计。

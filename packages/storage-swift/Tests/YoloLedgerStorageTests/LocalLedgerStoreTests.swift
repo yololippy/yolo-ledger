@@ -62,12 +62,12 @@ struct LocalLedgerStoreTests {
             let container = try LocalLedgerStore.makeContainer(at: storeURL)
             let context = ModelContext(container)
             context.autosaveEnabled = false
-            context.insert(LedgerSchemaV1.BookRecord(id: id, name: "磁盘账本", sortOrder: 0))
+            context.insert(LedgerSchemaV2.BookRecord(id: id, name: "磁盘账本", sortOrder: 0))
             try context.save()
         }
         let reopened = try LocalLedgerStore.makeContainer(at: storeURL)
         let context = ModelContext(reopened)
-        let records = try context.fetch(FetchDescriptor<LedgerSchemaV1.BookRecord>())
+        let records = try context.fetch(FetchDescriptor<LedgerSchemaV2.BookRecord>())
         #expect(records.count == 1)
         #expect(records.first?.id == id)
         #expect(records.first?.name == "磁盘账本")
@@ -84,7 +84,7 @@ struct LocalLedgerStoreTests {
             let container = try LocalLedgerStore.makeContainer(at: storeURL)
             let context = ModelContext(container)
             context.autosaveEnabled = false
-            context.insert(LedgerSchemaV1.BookRecord(id: id, name: "升级前账本", sortOrder: 0))
+            context.insert(LedgerSchemaV2.BookRecord(id: id, name: "升级前账本", sortOrder: 0))
             try context.save()
         }
 
@@ -106,7 +106,7 @@ struct LocalLedgerStoreTests {
         do {
             let container = try LocalLedgerStore.makeContainer(at: storeURL)
             let context = ModelContext(container)
-            let book = try #require(context.fetch(FetchDescriptor<LedgerSchemaV1.BookRecord>()).first)
+            let book = try #require(context.fetch(FetchDescriptor<LedgerSchemaV2.BookRecord>()).first)
             book.name = "升级后账本"
             try context.save()
         }
@@ -115,14 +115,14 @@ struct LocalLedgerStoreTests {
 
         #expect(try fetchBooks(from: snapshotURL).map(\.name) == ["升级前账本"])
         let current = try LocalLedgerStore.makeContainer(at: storeURL)
-        let currentBooks = try ModelContext(current).fetch(FetchDescriptor<LedgerSchemaV1.BookRecord>())
+        let currentBooks = try ModelContext(current).fetch(FetchDescriptor<LedgerSchemaV2.BookRecord>())
         #expect(currentBooks.map(\.name) == ["升级后账本"])
     }
 }
 
 @MainActor
-private func fetchBooks(from storeURL: URL) throws -> [LedgerSchemaV1.BookRecord] {
-    let schema = Schema(versionedSchema: LedgerSchemaV1.self)
+private func fetchBooks(from storeURL: URL) throws -> [LedgerSchemaV2.BookRecord] {
+    let schema = Schema(versionedSchema: LedgerSchemaV2.self)
     let configuration = ModelConfiguration(
         "UpgradeSnapshotVerification",
         schema: schema,
@@ -135,5 +135,5 @@ private func fetchBooks(from storeURL: URL) throws -> [LedgerSchemaV1.BookRecord
         migrationPlan: LedgerMigrationPlan.self,
         configurations: [configuration]
     )
-    return try ModelContext(container).fetch(FetchDescriptor<LedgerSchemaV1.BookRecord>())
+    return try ModelContext(container).fetch(FetchDescriptor<LedgerSchemaV2.BookRecord>())
 }

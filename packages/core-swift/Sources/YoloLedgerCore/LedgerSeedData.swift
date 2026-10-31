@@ -5,7 +5,7 @@ import Foundation
 public enum LedgerSeedData {
     public static let defaultBook = LedgerBook(
         id: UUID(uuidString: "A20E127A-36F6-401A-A6E3-000000000001")!,
-        name: "日常账本"
+        name: "默认账本"
     )
 
     public static let books = [defaultBook]

@@ -17,6 +17,8 @@
 
 `Support/LedgerAppBootstrap.swift` 同时编入两个 App，长期持有 `SwiftDataLedgerRepository` 并注入共享 UI。默认位置为各 App 容器的 `Application Support/YoloLedger/ledger.store`。打开失败显示错误和重试，不回退内存、不清库、不调用 fatalError。正常 App 使用纯本地 SwiftData 账库；UI 测试参数使用独立账库，并跳过真实书签恢复和后台调度。
 
+App 组装层还把 Storage 的喵喵记账批量导入处理器注入共享 UI。共享 UI 只产生 Core 导入计划；Storage 在写入前创建本地备份并返回导入报告，App 再通知文件夹同步控制器本地数据已变化。DEBUG 参数 `--ui-test-meow-import` 只注入脱敏的内存 CSV 选择动作，真实 App 始终使用 iPhone／Mac 系统文件选择器。
+
 两个 App Target 不再申请 CloudKit、iCloud Documents、推送或远程通知能力。“我的”页面由用户选择 iCloud Drive 或普通可写文件夹，App 保存 security-scoped bookmark 和随机、稳定的安装设备 ID；每次文件读写都在安全访问期间内执行。选定、启动、回到前台和本地写入后会尝试同步；同一时刻只有一个同步任务。iPhone 额外使用 best-effort `BGAppRefreshTask`，系统决定何时执行；Mac 仅在 App 活跃时执行。
 
 `Resources/Assets.xcassets` 同时编入 iPhone 与 Mac Target，`AppIcon` 使用已选定的有落记账亮系统蓝图标；iOS 使用 1024 × 1024 master，macOS 使用同一源图生成的标准多尺寸资源。
@@ -84,6 +86,13 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild \
 - Mac arm64 Debug 与 iPhone Simulator Debug 构建通过；Info.plist 和双端 entitlements 校验通过，工程不再包含 CloudKit、iCloud Documents、推送或远程通知能力。
 - iPhone 18 Pro / iOS 27.0 模拟器的导航冒烟用例 1/1 通过，确认“我的”页文件夹同步卡片及未配置操作可见，且 UI 测试账库不读取真实书签。结果为 `/tmp/yolo-ledger-folder-sync-ios-tests/Logs/Test/Test-YoloLedgerIOS-2026.10.31_12-02-58-+0800.xcresult`。
 - 真实 iCloud Drive／普通外部文件夹的双设备冲突交换、书签撤销，以及 iOS 系统实际调度 `BGAppRefreshTask` 仍需真机验收；模拟器构建通过不等于后台时机已验证。
+
+## 喵喵记账 CSV 导入验证（2026-10-31）
+
+- 共享 UI 25 项测试通过，其中 5 项针对多文件合并预览、任一错误阻断且不泄露原始备注、重复提交防护、失败保留选择与重新选择／取消。
+- Mac arm64 Debug 与 iPhone Simulator Debug 构建通过。
+- iPhone 18 Pro / iOS 27.0 模拟器聚焦用例 `testMeowImportPreviewBackupAndSuccessFlow` 通过：选择两份脱敏 CSV，预览 2 笔有效记录与 1 笔重复，执行真实 Storage 备份和导入，重启后切换到导入账本并核对两笔记录持久化。结果为 `/tmp/yolo-ledger-meow-import-ui-pass.xcresult`。
+- 本轮没有使用真实喵喵记账导出文件，也没有完成 iPhone 真机或 Mac 人工验收。真机需从“文件”选择一个或多个 CSV，核对预览与错误阻断，确认导入后检查成功报告和导入账本，再重复导入验证已有记录被跳过；Mac 需使用本机文件选择器执行同样流程。
 
 ## 喵喵样式重做验证（2026-10-28）
 

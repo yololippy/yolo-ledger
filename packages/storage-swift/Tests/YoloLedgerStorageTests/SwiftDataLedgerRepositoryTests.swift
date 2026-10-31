@@ -91,7 +91,7 @@ struct SwiftDataLedgerRepositoryTests {
         }
 
         let container = try LocalLedgerStore.makeContainer(at: directory.storeURL)
-        let records = try ModelContext(container).fetch(FetchDescriptor<LedgerSchemaV1.EntryRecord>())
+        let records = try ModelContext(container).fetch(FetchDescriptor<LedgerSchemaV2.EntryRecord>())
         let record = try #require(records.first { $0.id == created.id })
         #expect(record.deletedAt != nil)
     }
@@ -110,7 +110,7 @@ struct SwiftDataLedgerRepositoryTests {
             let container = try LocalLedgerStore.makeContainer(at: directory.storeURL)
             let context = ModelContext(container)
             context.autosaveEnabled = false
-            context.insert(LedgerSchemaV1.EntryRecord(
+            context.insert(LedgerSchemaV2.EntryRecord(
                 id: id,
                 bookID: LedgerSeedData.defaultBook.id,
                 categoryID: LedgerSeedData.categories.first { $0.kind == .expense }!.id,
@@ -122,7 +122,7 @@ struct SwiftDataLedgerRepositoryTests {
                 createdAt: olderDate,
                 updatedAt: olderDate
             ))
-            context.insert(LedgerSchemaV1.EntryRecord(
+            context.insert(LedgerSchemaV2.EntryRecord(
                 id: id,
                 bookID: LedgerSeedData.defaultBook.id,
                 categoryID: LedgerSeedData.categories.first { $0.kind == .expense }!.id,
@@ -144,7 +144,7 @@ struct SwiftDataLedgerRepositoryTests {
 
         do {
             let container = try LocalLedgerStore.makeContainer(at: directory.storeURL)
-            let records = try ModelContext(container).fetch(FetchDescriptor<LedgerSchemaV1.EntryRecord>())
+            let records = try ModelContext(container).fetch(FetchDescriptor<LedgerSchemaV2.EntryRecord>())
             #expect(records.filter { $0.id == id }.count == 1)
         }
 
@@ -152,7 +152,7 @@ struct SwiftDataLedgerRepositoryTests {
         do {
             let container = try LocalLedgerStore.makeContainer(at: directory.storeURL)
             let context = ModelContext(container)
-            context.insert(LedgerSchemaV1.EntryRecord(
+            context.insert(LedgerSchemaV2.EntryRecord(
                 id: id,
                 bookID: LedgerSeedData.defaultBook.id,
                 categoryID: LedgerSeedData.categories.first { $0.kind == .expense }!.id,
@@ -171,7 +171,7 @@ struct SwiftDataLedgerRepositoryTests {
         let afterDeletion = try SwiftDataLedgerRepository(storeURL: directory.storeURL)
         #expect(try await afterDeletion.fetchEntries().allSatisfy { $0.id != id })
         let finalContainer = try LocalLedgerStore.makeContainer(at: directory.storeURL)
-        let finalRecords = try ModelContext(finalContainer).fetch(FetchDescriptor<LedgerSchemaV1.EntryRecord>())
+        let finalRecords = try ModelContext(finalContainer).fetch(FetchDescriptor<LedgerSchemaV2.EntryRecord>())
             .filter { $0.id == id }
         #expect(finalRecords.count == 1)
         #expect(finalRecords.first?.deletedAt == deletionDate)
@@ -302,7 +302,7 @@ struct SwiftDataLedgerRepositoryTests {
             let container = try LocalLedgerStore.makeContainer(at: directory.storeURL)
             let context = ModelContext(container)
             context.autosaveEnabled = false
-            let record = try #require(context.fetch(FetchDescriptor<LedgerSchemaV1.EntryRecord>()).first)
+            let record = try #require(context.fetch(FetchDescriptor<LedgerSchemaV2.EntryRecord>()).first)
             record.sourceRawValue = "unrecognized-source"
             try context.save()
         }
@@ -313,7 +313,7 @@ struct SwiftDataLedgerRepositoryTests {
         _ = try await repository.createBook(name: "后续合法写入", id: UUID())
         let container = try LocalLedgerStore.makeContainer(at: directory.storeURL)
         let context = ModelContext(container)
-        let record = try #require(context.fetch(FetchDescriptor<LedgerSchemaV1.EntryRecord>()).first)
+        let record = try #require(context.fetch(FetchDescriptor<LedgerSchemaV2.EntryRecord>()).first)
         #expect(record.amountMinorUnits == original.amount.minorUnits)
         #expect(record.note == original.note)
         #expect(record.updatedAt == original.updatedAt)

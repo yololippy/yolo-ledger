@@ -26,10 +26,12 @@ Swift module / library：`YoloLedgerUI`，仅依赖本地 `YoloLedgerCore`。
 - 明细提供真实月日历、前后月切换、每日结余、日期选择、当日收支及列表筛选；日历卡片横向拖动时当前月跟手移动、相邻月同步进入，达到位移阈值或预测终点后完成翻页，否则回弹。左滑进入下一月、右滑返回上一月，箭头与手势复用同一段过渡动画，日期点击和纵向滚动保持可用。选中某一天后点击中央加号，新账目默认使用该日期；再次点击同一天或“查看整月”取消日期筛选。
 - 账单与明细共用自研年月选择器：点击年月标题后，iPhone 显示紧凑 Sheet，Mac 显示标题锚定 Popover；月份使用 3 × 4 网格，点击年份可进入每页 12 年的快速选择。月份模式按年分页，年份模式按 12 年范围分页，两种模式与日历共用横向分页组件，左右按钮和手势走相同动画。月份高亮同时匹配选中年份，切到其他年份不会保留旧月份高亮；“回到本月”只导航并保持面板打开。iPhone 点击 Sheet 外部灰色区域关闭，Mac Popover 点击外部自然关闭；两端均不显示额外关闭按钮。未引入第三方日历代码。
 - 详情使用白色票据、虚线和锯齿底边，支持编辑与确认删除。账本支持新建、重命名、切换；“我的”提供选择、立即同步、更换和停止使用文件夹，并展示文件夹名、最后成功时间、导入／导出数量、同步中或错误状态。
+- “我的”还提供喵喵记账 CSV 导入。系统文件选择器支持一次选择多个 CSV；`LedgerMeowImportController` 使用当前系统日历和本地时区调用 Core 解析器，合并预览文件、有效记录、错误、跨文件重复、账本、分类、账户、币种、收支笔数与金额，以及日期范围。任一文件存在错误时禁止写入，错误列表只显示文件名、行号和安全错误类型，不展示原始账单内容。
+- 导入确认页明确说明不会修改喵喵记账数据，并会在写入前创建本地备份。UI 只依赖 Core 的导入计划；真实写入通过 App 组装层注入的异步动作交给 Storage，提交期间禁止重复操作。成功报告展示导入、跳过重复、创建账本／分类、收支汇总和备份目录名；失败保留预览与来源文件，可重新选择或取消。
 - iPhone 快捷指令截图识别结果进入“确认截图记账”页面，预填金额、日期、商户备注和分类建议；用户确认保存后将来源记为 `.screenshotShortcut`。
 - iPhone“我的”页面提供“轻点两下，截图记账”三步设置指引和快捷指令跳转；系统的“轻点背面”绑定仍由用户在设置中完成。
 
-当前界面只是已实现功能的历史验证载体，后续以有落记账的品牌和交互设计为准。完整分类管理、图表、导入导出和定时记账仍属于后续阶段；用户选择文件夹的真实双设备验收单独跟踪。
+当前界面只是已实现功能的历史验证载体，后续以有落记账的品牌和交互设计为准。完整分类管理、图表、通用导入导出和定时记账仍属于后续阶段；用户选择文件夹的真实双设备验收单独跟踪。
 
 ## 状态与数据
 
@@ -47,7 +49,7 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift build --package-p
 DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test --package-path packages/ui-swift
 ```
 
-2026-10-31：20 项状态测试通过，在原有读写、失败、账本、日历和并发刷新语义上，新增文件夹同步状态／操作转发、“仅本地写入成功后触发同步”，以及横向分页方向、阈值、预测终点、纵横主导与跟手位移覆盖。
+2026-10-31：25 项状态测试通过。在原有读写、失败、账本、日历、并发刷新、文件夹同步和横向分页语义上，新增多文件合并预览、错误阻断与隐私脱敏、重复提交防护、失败保留选择，以及成功报告覆盖。
 
 端到端流程、独立测试账库与报告见 [Xcode 工程说明](../../apps/xcode/README.md)。
 
@@ -59,5 +61,6 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test --package-pa
 - 日历与年月分页：`calendar.card`、`calendar.pager`、`month.previous`、`month.next`、`month.title`、`month-picker.year-pager`、`month-picker.range-pager`、`month-picker.year-toggle`、`month-picker.year.previous`、`month-picker.year.next`、`month-picker.range.previous`、`month-picker.range.next`、`month-picker.month.<1...12>`、`month-picker.year.<year>`、`month-picker.current`、`month-picker.back-to-months`、`calendar.day.<day>`、`calendar.clear-selection`。
 - 详情：`entry.row.<UUID>`、`detail.amount`、`detail.note`、`entry.edit`、`entry.delete`、`entry.delete.confirm`、`detail.close`。票据按 `updatedAt` 重建，保持编辑后的辅助功能内容同步。
 - 账本／汇总：`ledger.book-picker`、`book.add`、`book.select.<UUID>`、`book.rename.<UUID>`、`book-editor.name`、`book-editor.save`、`summary.income`、`summary.expense`、`summary.balance`。
+- 喵喵导入：`settings.meow-import.card`、`settings.meow-import.choose`、`meow-import.metrics`、`meow-import.summary`、`meow-import.issues`、`meow-import.safety`、`meow-import.failure`、`meow-import.success`、`meow-import.reselect`、`meow-import.confirm`、`meow-import.cancel`、`meow-import.done`。
 
 Swift tools 6.0 / Swift 6；临时构建基线为 macOS 14 / iOS 17，正式最低支持版本仍待确定。仅面向 Mac / iPhone，iPadOS 暂不支持。

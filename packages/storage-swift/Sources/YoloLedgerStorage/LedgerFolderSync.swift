@@ -26,7 +26,8 @@ public enum LedgerFolderSyncError: Error, Equatable, Sendable, LocalizedError {
 }
 
 struct LedgerFolderSnapshot: Codable, Equatable, Sendable {
-    static let currentFormatVersion = 1
+    static let currentFormatVersion = 2
+    static let supportedFormatVersions: Set<Int> = [1, currentFormatVersion]
 
     let formatVersion: Int
     let schemaVersion: String
@@ -64,9 +65,62 @@ struct LedgerFolderSnapshot: Codable, Equatable, Sendable {
         let occurredAt: Date
         let note: String
         let sourceRawValue: String
+        let importFormatRawValue: String?
+        let importDeduplicationKey: String?
+        let importOriginalCategory: String?
+        let importOriginalTimestamp: String?
+        let importOriginalAmount: String?
+        let importOriginalAccount: String?
+        let importOriginalBook: String?
+        let importOriginalCurrency: String?
+        let importOriginalNote: String?
         let createdAt: Date
         let updatedAt: Date
         let deletedAt: Date?
+
+        init(
+            id: UUID,
+            bookID: UUID,
+            categoryID: UUID,
+            kindRawValue: String,
+            amountMinorUnits: Int64,
+            occurredAt: Date,
+            note: String,
+            sourceRawValue: String,
+            importFormatRawValue: String? = nil,
+            importDeduplicationKey: String? = nil,
+            importOriginalCategory: String? = nil,
+            importOriginalTimestamp: String? = nil,
+            importOriginalAmount: String? = nil,
+            importOriginalAccount: String? = nil,
+            importOriginalBook: String? = nil,
+            importOriginalCurrency: String? = nil,
+            importOriginalNote: String? = nil,
+            createdAt: Date,
+            updatedAt: Date,
+            deletedAt: Date?
+        ) {
+            self.id = id
+            self.bookID = bookID
+            self.categoryID = categoryID
+            self.kindRawValue = kindRawValue
+            self.amountMinorUnits = amountMinorUnits
+            self.occurredAt = occurredAt
+            self.note = note
+            self.sourceRawValue = sourceRawValue
+            self.importFormatRawValue = importFormatRawValue
+            self.importDeduplicationKey = importDeduplicationKey
+            self.importOriginalCategory = importOriginalCategory
+            self.importOriginalTimestamp = importOriginalTimestamp
+            self.importOriginalAmount = importOriginalAmount
+            self.importOriginalAccount = importOriginalAccount
+            self.importOriginalBook = importOriginalBook
+            self.importOriginalCurrency = importOriginalCurrency
+            self.importOriginalNote = importOriginalNote
+            self.createdAt = createdAt
+            self.updatedAt = updatedAt
+            self.deletedAt = deletedAt
+        }
     }
 }
 
@@ -203,13 +257,13 @@ enum LedgerFolderSnapshotIO {
     private static func validate(_ snapshot: LedgerFolderSnapshot, fileURL: URL?) throws {
         let file = fileURL?.lastPathComponent
             ?? "\(snapshot.deviceID.uuidString.lowercased()).json"
-        guard snapshot.formatVersion == LedgerFolderSnapshot.currentFormatVersion else {
+        guard LedgerFolderSnapshot.supportedFormatVersions.contains(snapshot.formatVersion) else {
             throw LedgerFolderSyncError.unsupportedFormatVersion(
                 file: file,
                 found: snapshot.formatVersion
             )
         }
-        guard snapshot.schemaVersion == LocalLedgerStore.currentSchemaVersion else {
+        guard LocalLedgerStore.supportedFolderSnapshotSchemaVersions.contains(snapshot.schemaVersion) else {
             throw LedgerFolderSyncError.unsupportedSchemaVersion(
                 file: file,
                 found: snapshot.schemaVersion
@@ -277,6 +331,34 @@ enum LedgerFolderSnapshotIO {
             guard category.kindRawValue == kind.rawValue else {
                 throw LedgerFolderSyncError.invalidSnapshot(file: file, reason: "账目与分类类型不一致")
             }
+            try validateImportMetadata(record, file: file)
+        }
+    }
+
+    private static func validateImportMetadata(
+        _ record: LedgerFolderSnapshot.Entry,
+        file: String
+    ) throws {
+        let values = [
+            record.importFormatRawValue,
+            record.importDeduplicationKey,
+            record.importOriginalCategory,
+            record.importOriginalTimestamp,
+            record.importOriginalAmount,
+            record.importOriginalAccount,
+            record.importOriginalBook,
+            record.importOriginalCurrency,
+            record.importOriginalNote,
+        ]
+        if values.allSatisfy({ $0 == nil }) { return }
+        guard values.allSatisfy({ $0 != nil }),
+              record.sourceRawValue == LedgerEntrySource.meowLedgerImport.rawValue,
+              let format = record.importFormatRawValue,
+              LedgerEntryImportFormat(rawValue: format) != nil,
+              let key = record.importDeduplicationKey,
+              !key.isEmpty
+        else {
+            throw LedgerFolderSyncError.invalidSnapshot(file: file, reason: "账目导入元数据不完整")
         }
     }
 
@@ -410,7 +492,7 @@ protocol LedgerFolderVersionedRecord: Codable, Equatable, Sendable {
 }
 
 extension LedgerFolderSnapshot.Book: LedgerFolderVersionedRecord {
-    init(_ record: LedgerSchemaV1.BookRecord) {
+    init(_ record: LedgerSchemaV2.BookRecord) {
         self.init(
             id: record.id,
             name: record.name,
@@ -421,7 +503,7 @@ extension LedgerFolderSnapshot.Book: LedgerFolderVersionedRecord {
         )
     }
 
-    func apply(to record: LedgerSchemaV1.BookRecord) {
+    func apply(to record: LedgerSchemaV2.BookRecord) {
         record.name = name
         record.sortOrder = sortOrder
         record.createdAt = createdAt
@@ -431,7 +513,7 @@ extension LedgerFolderSnapshot.Book: LedgerFolderVersionedRecord {
 }
 
 extension LedgerFolderSnapshot.Category: LedgerFolderVersionedRecord {
-    init(_ record: LedgerSchemaV1.CategoryRecord) {
+    init(_ record: LedgerSchemaV2.CategoryRecord) {
         self.init(
             id: record.id,
             name: record.name,
@@ -443,7 +525,7 @@ extension LedgerFolderSnapshot.Category: LedgerFolderVersionedRecord {
         )
     }
 
-    func apply(to record: LedgerSchemaV1.CategoryRecord) {
+    func apply(to record: LedgerSchemaV2.CategoryRecord) {
         record.name = name
         record.kindRawValue = kindRawValue
         record.sortOrder = sortOrder
@@ -454,7 +536,7 @@ extension LedgerFolderSnapshot.Category: LedgerFolderVersionedRecord {
 }
 
 extension LedgerFolderSnapshot.Entry: LedgerFolderVersionedRecord {
-    init(_ record: LedgerSchemaV1.EntryRecord) {
+    init(_ record: LedgerSchemaV2.EntryRecord) {
         self.init(
             id: record.id,
             bookID: record.bookID,
@@ -464,13 +546,22 @@ extension LedgerFolderSnapshot.Entry: LedgerFolderVersionedRecord {
             occurredAt: record.occurredAt,
             note: record.note,
             sourceRawValue: record.sourceRawValue,
+            importFormatRawValue: record.importFormatRawValue,
+            importDeduplicationKey: record.importDeduplicationKey,
+            importOriginalCategory: record.importOriginalCategory,
+            importOriginalTimestamp: record.importOriginalTimestamp,
+            importOriginalAmount: record.importOriginalAmount,
+            importOriginalAccount: record.importOriginalAccount,
+            importOriginalBook: record.importOriginalBook,
+            importOriginalCurrency: record.importOriginalCurrency,
+            importOriginalNote: record.importOriginalNote,
             createdAt: record.createdAt,
             updatedAt: record.updatedAt,
             deletedAt: record.deletedAt
         )
     }
 
-    func apply(to record: LedgerSchemaV1.EntryRecord) {
+    func apply(to record: LedgerSchemaV2.EntryRecord) {
         record.bookID = bookID
         record.categoryID = categoryID
         record.kindRawValue = kindRawValue
@@ -478,6 +569,15 @@ extension LedgerFolderSnapshot.Entry: LedgerFolderVersionedRecord {
         record.occurredAt = occurredAt
         record.note = note
         record.sourceRawValue = sourceRawValue
+        record.importFormatRawValue = importFormatRawValue
+        record.importDeduplicationKey = importDeduplicationKey
+        record.importOriginalCategory = importOriginalCategory
+        record.importOriginalTimestamp = importOriginalTimestamp
+        record.importOriginalAmount = importOriginalAmount
+        record.importOriginalAccount = importOriginalAccount
+        record.importOriginalBook = importOriginalBook
+        record.importOriginalCurrency = importOriginalCurrency
+        record.importOriginalNote = importOriginalNote
         record.createdAt = createdAt
         record.updatedAt = updatedAt
         record.deletedAt = deletedAt
