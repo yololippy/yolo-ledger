@@ -47,9 +47,6 @@ final class CloudSyncMonitor: @unchecked Sendable {
     }
 
     func updates() -> AsyncStream<Void> {
-        guard cloudContainer != nil else {
-            return AsyncStream { continuation in continuation.finish() }
-        }
         let id = UUID()
         return AsyncStream(bufferingPolicy: .bufferingNewest(1)) { [weak self] continuation in
             guard let self else {
@@ -67,6 +64,13 @@ final class CloudSyncMonitor: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         return state
+    }
+
+    func notifyExternalChange() {
+        lock.lock()
+        let values = Array(continuations.values)
+        lock.unlock()
+        for continuation in values { continuation.yield() }
     }
 
     func refreshAccountStatus() {

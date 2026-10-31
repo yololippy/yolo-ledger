@@ -12,15 +12,14 @@ import YoloLedgerStorage
 
 let storeURL = try SwiftDataLedgerRepository.defaultStoreURL()
 let repository: any LedgerRepository = try SwiftDataLedgerRepository(
-    storeURL: storeURL,
-    syncMode: YoloLedgerICloud.syncMode
+    storeURL: storeURL
 )
 let books = try await repository.fetchBooks()
 ```
 
 公开初始化接口：
 
-- `init(storeURL:syncMode:) throws`：打开指定的真实磁盘数据库；默认 `.local` 便于测试，App 组装层传入 `YoloLedgerICloud.syncMode` 启用私有 CloudKit 同步。
+- `init(storeURL:syncMode:) throws`：打开指定的真实磁盘数据库；默认 `.local`，文件夹同步不依赖 CloudKit 或 iCloud entitlement。旧的 `YoloLedgerICloud.syncMode` 配置保留给未来方案评估，当前文件同步不使用它。
 - `static func defaultStoreURL() throws -> URL`：生成当前 App 容器中的 `Application Support/YoloLedger/ledger.store` 路径。
 - `storeURL: URL`：记录实际打开的文件地址。
 
@@ -31,14 +30,35 @@ M1 的 `EmptyLedgerBookRepository` 继续保留，用于旧骨架和只需要 `L
 ## 保存与一致性
 
 - SwiftData 的 `ModelContext` 隔离在内部串行 `ModelActor` 中，跨模块只传递 Core 的 Sendable 值类型。
-- 显式配置磁盘 URL；正常 App 使用 `.private("iCloud.com.yololedger.app")`，单元与 UI 测试使用 `.none`。没有内存回退或删除旧库重建的错误恢复路径，目录、数据库初始化、读取和保存错误向调用方传播。
+- 显式配置磁盘 URL；正常 App、单元测试和 UI 测试都使用本地模式，文件夹同步由独立的 `LedgerFolderSyncing` 调用完成。没有内存回退或删除旧库重建的错误恢复路径，目录、数据库初始化、读取和保存错误向调用方传播。
 - 关闭隐式 autosave，初始化种子和每个写操作显式 `save()`；发生错误时 `rollback()`，防止失败修改混入后续合法保存。
 - 使用 Core 的稳定种子账本／分类和已保存的初始化标记；重新打开仓库不会重复插入或重置已改名的种子账本。系统支出分类名称与顺序采用 Core 按用户截图提供的种子，原日用及收入分类继续保留。
 - 金额以 `Int64` 分保存，不转为 Double；保存原始 `Date`，本地时区的展示和日期范围计算由 Core / UI 负责。
 - 新增和更新前验证账本、分类、收支匹配和日期。重复及不存在的 ID 返回对应 `LedgerError`。更新账目保留 ID、`source` 和 `createdAt`，只修改可编辑字段与 `updatedAt`。
 - 同一 App 的窗口和页面复用一个仓库实例。已验证同一实例内并发提交相同 ID 只有一次成功；多进程或多个活跃仓库同时写同一路径的场景尚未验收。
 - CloudKit 模式移除持久层唯一约束，由仓库按业务 UUID 去重。相同 UUID 以较新的修改／删除时间优先，时间相同时用稳定字段排序；账目删除写入 `deletedAt`，避免另一设备把已删除记录重新上传回来。
-- `CloudSyncMonitor` 监听持久化 CloudKit 事件与 Apple Account 状态，通过 Core 的变更流触发 UI 重新读取；系统负责实际上传、下载和重试时机。
+- 旧 `CloudSyncMonitor` 兼容代码仍可表达未来 CloudKit 配置；当前本地模式下同一变更流由文件夹同步成功后主动触发，UI 据此重新读取。
+
+## 用户选定文件夹同步
+
+`SwiftDataLedgerRepository` 同时实现 Core 的 `LedgerFolderSyncing`。平台层负责让用户选择普通文件夹或 iCloud Drive 文件夹、保存 security-scoped bookmark 并在调用期间取得访问权限；Storage 只接收已授权的 URL：
+
+```swift
+let report = try await repository.synchronize(
+    folderURL: authorizedFolderURL,
+    deviceID: installationDeviceID
+)
+```
+
+- SwiftData 本地库始终是运行时真源。同步目录只保存交换快照，不包含 `ledger.store`、SQLite、WAL 或 SHM。
+- 交换位置为 `有落同步数据/devices/<device UUID>.json`。每个安装只覆盖自己的快照，不删除其他设备文件；缺少某台设备的文件不表示删除数据。
+- JSON 协议当前为 `formatVersion: 1`、`schemaVersion: 1.1.0`，使用排序键、缩进和带 9 位小数秒的 UTC ISO 8601 日期。快照包含账本、分类、账目的全部持久化字段及软删除时间。
+- 每轮先通过 `NSFileCoordinator` 读取并完整解码所有设备快照，检查文件名／deviceID、版本、重复 UUID、枚举值、时间、账目引用和收支类型。任何损坏或不支持版本都会在修改本地前明确失败。
+- 合并以业务 UUID 为键，比较 `max(updatedAt, deletedAt)`；时间相同先选 tombstone，再按完整稳定字段和来源 deviceID 确定结果。tombstone 会继续导出，避免缺文件或旧快照让删除数据复活。
+- 本地变化在串行 `ModelActor` 中一次保存，失败统一 rollback。成功后把合并后的完整数据写到同目录临时文件，再原子替换本设备 JSON，并通过 `updates()` 通知界面重新读取。
+- `LedgerFolderSyncReport.importedRecordCount` 是本轮因文件快照而改变的本地记录数；`exportedRecordCount` 是写入本设备完整快照的账本、分类和账目记录总数，包含 tombstone。
+
+文件夹同步不会自动监听目录变化或常驻后台轮询；调用时机、错误展示、bookmark 生命周期和 iCloud Drive 文件下载状态由 Mac / iPhone 平台层负责。
 
 ## 数据版本
 
@@ -77,12 +97,14 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift build --package-p
 DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test --package-path packages/storage-swift
 ```
 
-2026-10-30 使用 Xcode 27.1 完成 macOS arm64 构建和 **22 项测试**。测试使用各自独立的真实临时磁盘文件，覆盖种子幂等、账目新增／更新／软删除后重开保留、精确大额金额、账本筛选与改名、并发重复 ID、CloudKit 型重复 UUID 收敛、无效输入、失败回滚、升级前快照只创建一次，以及文件系统错误和损坏数据库不被清空。
+2026-10-31 使用 Xcode 27.1 完成 macOS arm64 构建和 **30 项测试**。测试使用各自独立的真实临时磁盘文件，覆盖种子幂等、账目新增／更新／软删除后重开保留、精确大额金额、账本筛选与改名、并发重复 ID、CloudKit 型重复 UUID 收敛、无效输入、失败回滚、升级前快照只创建一次，以及文件系统错误和损坏数据库不被清空。
 
 其中 5 项分类升级测试先直接写入冻结的旧 8 分类、旧初始化标记、旧账目和改名账本，真实落盘后再打开仓库升级；覆盖新旧安装一致、自定义数据保留、重开无重复、只读保存失败回滚与重试，以及已升级库无需再保存。
+
+其中 7 项文件夹同步测试使用真实临时交换目录和两个独立 SwiftData store / deviceID，覆盖 A 新增后 B 导入、B 修改和删除后 A 收敛、双方离线新增、相同时间确定性与 tombstone 优先、同一秒内小数时间顺序、损坏与不支持版本不改本地、原子替换无临时残留、重开保留及成功后的更新通知。
 
 损坏库与只读升级失败测试会触发预期的 Core Data 错误日志；测试同时断言错误可捕获且原数据保留。本次分类升级的 iOS 构建与双端 App 体验仍由 Apple / main 集成验收。
 
 ## 后续职责与边界
 
-本轮实现本地账本与账目操作、一次性种子初始化、CloudKit 兼容模型、同步事件通知和冲突去重。完整备份恢复、分类管理、批量操作恢复、定时规则和截图识别仍属于后续任务；CloudKit 真实双设备、Developer/Production Schema 与 iCloud Drive 可见目录另行验收。
+本轮实现本地账本与账目操作、一次性种子初始化、用户选定文件夹的完整快照交换、同步事件通知和冲突收敛。完整备份恢复、分类管理、批量操作恢复和定时规则仍属于后续任务；真实 iCloud Drive 双设备下载／上传时机、bookmark 权限恢复、网络中断及物理 iPhone 后台行为仍待验收。旧 CloudKit 代码只作为未来可选实现保留，不是当前 App 配置。

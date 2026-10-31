@@ -3,7 +3,7 @@ import SwiftData
 import YoloLedgerCore
 
 /// A local, disk-backed repository. Create one instance per active app store.
-public struct SwiftDataLedgerRepository: LedgerRepository {
+public struct SwiftDataLedgerRepository: LedgerRepository, LedgerFolderSyncing {
     public let storeURL: URL
     private let store: LedgerStoreActor
     private let syncMonitor: CloudSyncMonitor
@@ -63,6 +63,28 @@ public struct SwiftDataLedgerRepository: LedgerRepository {
     public func updates() -> AsyncStream<Void> { syncMonitor.updates() }
 
     public func currentSyncState() -> LedgerSyncState { syncMonitor.currentState() }
+
+    public func synchronize(folderURL: URL, deviceID: UUID) async throws -> LedgerFolderSyncReport {
+        // Decode and validate every visible device snapshot before opening a local merge transaction.
+        let snapshots = try LedgerFolderSnapshotIO.readAll(from: folderURL)
+        let generatedAt = Date()
+        let mergeResult = try await store.mergeFolderSnapshots(
+            snapshots,
+            deviceID: deviceID,
+            generatedAt: generatedAt
+        )
+        try LedgerFolderSnapshotIO.write(mergeResult.snapshot, to: folderURL)
+        let completedAt = Date()
+        let report = LedgerFolderSyncReport(
+            importedRecordCount: mergeResult.importedRecordCount,
+            exportedRecordCount: mergeResult.snapshot.books.count
+                + mergeResult.snapshot.categories.count
+                + mergeResult.snapshot.entries.count,
+            completedAt: completedAt
+        )
+        syncMonitor.notifyExternalChange()
+        return report
+    }
 }
 
 private actor LedgerStoreActor: ModelActor {
@@ -224,6 +246,203 @@ private actor LedgerStoreActor: ModelActor {
             record.name = normalizedName
             record.updatedAt = max(Date(), record.updatedAt)
             return LedgerBook(id: record.id, name: record.name)
+        }
+    }
+
+    func mergeFolderSnapshots(
+        _ snapshots: [LedgerFolderSnapshot],
+        deviceID: UUID,
+        generatedAt: Date
+    ) throws -> LedgerFolderMergeResult {
+        do {
+            let allBooks = try modelContext.fetch(FetchDescriptor<LedgerSchemaV1.BookRecord>())
+            let allCategories = try modelContext.fetch(FetchDescriptor<LedgerSchemaV1.CategoryRecord>())
+            let allEntries = try modelContext.fetch(FetchDescriptor<LedgerSchemaV1.EntryRecord>())
+
+            let bookRecords = canonicalRecords(allBooks, preferredBy: Self.preferredBook)
+            let categoryRecords = canonicalRecords(allCategories, preferredBy: Self.preferredCategory)
+            let entryRecords = canonicalRecords(allEntries, preferredBy: Self.preferredEntry)
+
+            var books = Dictionary(uniqueKeysWithValues: bookRecords.map {
+                ($0.id, LedgerFolderCandidate(record: LedgerFolderSnapshot.Book($0), sourceDeviceID: deviceID))
+            })
+            var categories = Dictionary(uniqueKeysWithValues: categoryRecords.map {
+                ($0.id, LedgerFolderCandidate(record: LedgerFolderSnapshot.Category($0), sourceDeviceID: deviceID))
+            })
+            var entries = Dictionary(uniqueKeysWithValues: entryRecords.map {
+                ($0.id, LedgerFolderCandidate(record: LedgerFolderSnapshot.Entry($0), sourceDeviceID: deviceID))
+            })
+
+            for snapshot in snapshots.sorted(by: { $0.deviceID.uuidString < $1.deviceID.uuidString }) {
+                merge(snapshot.books, sourceDeviceID: snapshot.deviceID, into: &books)
+                merge(snapshot.categories, sourceDeviceID: snapshot.deviceID, into: &categories)
+                merge(snapshot.entries, sourceDeviceID: snapshot.deviceID, into: &entries)
+            }
+
+            let bookRecordsByID = Dictionary(uniqueKeysWithValues: bookRecords.map { ($0.id, $0) })
+            let categoryRecordsByID = Dictionary(uniqueKeysWithValues: categoryRecords.map { ($0.id, $0) })
+            let entryRecordsByID = Dictionary(uniqueKeysWithValues: entryRecords.map { ($0.id, $0) })
+            var importedRecordCount = 0
+
+            for candidate in books.values {
+                if let record = bookRecordsByID[candidate.record.id] {
+                    guard LedgerFolderSnapshot.Book(record) != candidate.record else { continue }
+                    candidate.record.apply(to: record)
+                } else {
+                    let value = candidate.record
+                    modelContext.insert(LedgerSchemaV1.BookRecord(
+                        id: value.id,
+                        name: value.name,
+                        sortOrder: value.sortOrder,
+                        createdAt: value.createdAt,
+                        updatedAt: value.updatedAt,
+                        deletedAt: value.deletedAt
+                    ))
+                }
+                importedRecordCount += 1
+            }
+            for candidate in categories.values {
+                if let record = categoryRecordsByID[candidate.record.id] {
+                    guard LedgerFolderSnapshot.Category(record) != candidate.record else { continue }
+                    candidate.record.apply(to: record)
+                } else {
+                    let value = candidate.record
+                    modelContext.insert(LedgerSchemaV1.CategoryRecord(
+                        id: value.id,
+                        name: value.name,
+                        kindRawValue: value.kindRawValue,
+                        sortOrder: value.sortOrder,
+                        createdAt: value.createdAt,
+                        updatedAt: value.updatedAt,
+                        deletedAt: value.deletedAt
+                    ))
+                }
+                importedRecordCount += 1
+            }
+            for candidate in entries.values {
+                if let record = entryRecordsByID[candidate.record.id] {
+                    guard LedgerFolderSnapshot.Entry(record) != candidate.record else { continue }
+                    candidate.record.apply(to: record)
+                } else {
+                    let value = candidate.record
+                    modelContext.insert(LedgerSchemaV1.EntryRecord(
+                        id: value.id,
+                        bookID: value.bookID,
+                        categoryID: value.categoryID,
+                        kindRawValue: value.kindRawValue,
+                        amountMinorUnits: value.amountMinorUnits,
+                        occurredAt: value.occurredAt,
+                        note: value.note,
+                        sourceRawValue: value.sourceRawValue,
+                        createdAt: value.createdAt,
+                        updatedAt: value.updatedAt,
+                        deletedAt: value.deletedAt
+                    ))
+                }
+                importedRecordCount += 1
+            }
+
+            try validateMergedRecords(
+                books: books.values.map(\.record),
+                categories: categories.values.map(\.record),
+                entries: entries.values.map(\.record)
+            )
+            if modelContext.hasChanges { try modelContext.save() }
+
+            let snapshot = LedgerFolderSnapshot(
+                formatVersion: LedgerFolderSnapshot.currentFormatVersion,
+                schemaVersion: LocalLedgerStore.currentSchemaVersion,
+                deviceID: deviceID,
+                generatedAt: generatedAt,
+                books: books.values.map(\.record).sorted { $0.id.uuidString < $1.id.uuidString },
+                categories: categories.values.map(\.record).sorted { $0.id.uuidString < $1.id.uuidString },
+                entries: entries.values.map(\.record).sorted { $0.id.uuidString < $1.id.uuidString }
+            )
+            return LedgerFolderMergeResult(
+                importedRecordCount: importedRecordCount,
+                snapshot: snapshot
+            )
+        } catch {
+            modelContext.rollback()
+            throw error
+        }
+    }
+
+    private func canonicalRecords<Record: PersistentModel>(
+        _ records: [Record],
+        preferredBy: (Record, Record) -> Bool
+    ) -> [Record] where Record: AnyObject {
+        var canonical: [Record] = []
+        for values in Dictionary(grouping: records, by: { recordID($0) }).values {
+            let ordered = values.sorted(by: preferredBy)
+            canonical.append(ordered[0])
+            for duplicate in ordered.dropFirst() { modelContext.delete(duplicate) }
+        }
+        return canonical
+    }
+
+    private func recordID<Record: PersistentModel>(_ record: Record) -> UUID {
+        switch record {
+        case let book as LedgerSchemaV1.BookRecord: book.id
+        case let category as LedgerSchemaV1.CategoryRecord: category.id
+        case let entry as LedgerSchemaV1.EntryRecord: entry.id
+        default: preconditionFailure("Unsupported ledger record type")
+        }
+    }
+
+    private func merge<Record: LedgerFolderVersionedRecord>(
+        _ incoming: [Record],
+        sourceDeviceID: UUID,
+        into records: inout [UUID: LedgerFolderCandidate<Record>]
+    ) {
+        for record in incoming {
+            let candidate = LedgerFolderCandidate(record: record, sourceDeviceID: sourceDeviceID)
+            if let current = records[record.id] {
+                if Self.prefers(candidate, over: current) { records[record.id] = candidate }
+            } else {
+                records[record.id] = candidate
+            }
+        }
+    }
+
+    private static func prefers<Record: LedgerFolderVersionedRecord>(
+        _ candidate: LedgerFolderCandidate<Record>,
+        over current: LedgerFolderCandidate<Record>
+    ) -> Bool {
+        let candidateDate = max(candidate.record.updatedAt, candidate.record.deletedAt ?? .distantPast)
+        let currentDate = max(current.record.updatedAt, current.record.deletedAt ?? .distantPast)
+        if candidateDate != currentDate { return candidateDate > currentDate }
+        if (candidate.record.deletedAt != nil) != (current.record.deletedAt != nil) {
+            return candidate.record.deletedAt != nil
+        }
+
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        let candidateData = try? encoder.encode(candidate.record)
+        let currentData = try? encoder.encode(current.record)
+        if candidateData != currentData {
+            return currentData.map { candidateData?.lexicographicallyPrecedes($0) == false } ?? true
+        }
+        return candidate.sourceDeviceID.uuidString > current.sourceDeviceID.uuidString
+    }
+
+    private func validateMergedRecords(
+        books: [LedgerFolderSnapshot.Book],
+        categories: [LedgerFolderSnapshot.Category],
+        entries: [LedgerFolderSnapshot.Entry]
+    ) throws {
+        let bookIDs = Set(books.map(\.id))
+        let categoriesByID = Dictionary(uniqueKeysWithValues: categories.map { ($0.id, $0) })
+        for entry in entries {
+            guard bookIDs.contains(entry.bookID),
+                  let category = categoriesByID[entry.categoryID],
+                  category.kindRawValue == entry.kindRawValue
+            else {
+                throw LedgerFolderSyncError.invalidSnapshot(
+                    file: "合并结果",
+                    reason: "账目引用或收支类型冲突"
+                )
+            }
         }
     }
 
