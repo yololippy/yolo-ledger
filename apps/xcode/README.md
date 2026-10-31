@@ -13,15 +13,15 @@
 
 显示名“有落”，英文名 `YoloLedger`。iOS 仅面向 iPhone，关闭 iPad、Mac Catalyst、Designed for iPhone on Mac 和 Vision 兼容入口；Mac 使用独立原生 target。
 
-`Support/LedgerAppBootstrap.swift` 同时编入两个 App，长期持有 `SwiftDataLedgerRepository` 并注入共享 UI。默认位置为各 App 容器的 `Application Support/YoloLedger/ledger.store`。打开失败显示错误和重试，不回退内存、不清库、不调用 fatalError。正常 App 使用 CloudKit 私有数据库自动同步；UI 测试参数仍强制使用纯本地隔离账库。
+`Support/LedgerAppBootstrap.swift` 同时编入两个 App，长期持有 `SwiftDataLedgerRepository` 并注入共享 UI。默认位置为各 App 容器的 `Application Support/YoloLedger/ledger.store`。打开失败显示错误和重试，不回退内存、不清库、不调用 fatalError。正常 App 使用纯本地 SwiftData 账库；UI 测试参数使用独立账库，并跳过真实书签恢复和后台调度。
 
-两个 App Target 启用 CloudKit、iCloud Documents、推送与远程通知，并共享 `iCloud.com.yololedger.app`。首次成功访问 iCloud Documents 时创建 `Documents/关于有落.txt`，使“文件”App和 Finder 中出现用户可见的“有落”目录；运行中的 SwiftData 数据库不会写入该目录。
+两个 App Target 不再申请 CloudKit、iCloud Documents、推送或远程通知能力。“我的”页面由用户选择 iCloud Drive 或普通可写文件夹，App 保存 security-scoped bookmark 和随机、稳定的安装设备 ID；每次文件读写都在安全访问期间内执行。选定、启动、回到前台和本地写入后会尝试同步；同一时刻只有一个同步任务。iPhone 额外使用 best-effort `BGAppRefreshTask`，系统决定何时执行；Mac 仅在 App 活跃时执行。
 
 `Resources/Assets.xcassets` 同时编入 iPhone 与 Mac Target，`AppIcon` 使用已选定的有落亮系统蓝图标；iOS 使用 1024 × 1024 master，macOS 使用同一源图生成的标准多尺寸资源。
 
 iPhone target 通过 `Configuration/YoloLedgerIOS.entitlements` 将默认数据保护设为 `NSFileProtectionComplete`，存储层同时处理既有数据库文件。Bundle ID 和 `Application Support` 相对路径保持稳定；SwiftData 以版本化 schema 打开，版本变化前先创建不覆盖的本地升级快照。
 
-当前已有本地新增收支、编辑、确认删除、基本账本管理、月收支汇总与日历筛选。UI 按[喵喵记账参考材料](../../docs/references/meow-ledger/README.md)重做为纸张、描边、圆形分类、黄色数字键盘和票据样式；未展示的参考页面按同一视觉组件适配。功能与状态见 [UI 模块](../../packages/ui-swift/README.md)。
+当前已有本地新增收支、编辑、确认删除、基本账本管理、月收支汇总与日历筛选。当前界面是功能验证期的历史临时实现；后续按有落自己的品牌与交互重做，不再以其他记账产品为设计规范。功能与状态见 [UI 模块](../../packages/ui-swift/README.md)。
 
 工具 Xcode 27.1（27A9275）、Swift 6。临时构建基线 macOS 14 / iOS 17，正式最低支持范围待确定。Mac 与模拟器使用本地 ad-hoc 签名，无个人团队或证书；真机另行配置与验收。
 
@@ -76,6 +76,13 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild \
 
 重复执行需要新的 `.xcresult` 路径。仅运行导航／选项可加 `-only-testing:YoloLedgerIOSUITests/NavigationSmokeTests/testFourDestinationsAreReachable`。
 
+## 用户选择文件夹同步验证（2026-10-31）
+
+- `YoloLedgerUI` 15 项状态测试通过，包含同步状态展示、操作转发及本地写入成功／失败后的触发语义。
+- Mac arm64 Debug 与 iPhone Simulator Debug 构建通过；Info.plist 和双端 entitlements 校验通过，工程不再包含 CloudKit、iCloud Documents、推送或远程通知能力。
+- iPhone 18 Pro / iOS 27.0 模拟器的导航冒烟用例 1/1 通过，确认“我的”页文件夹同步卡片及未配置操作可见，且 UI 测试账库不读取真实书签。结果为 `/tmp/yolo-ledger-folder-sync-ios-tests/Logs/Test/Test-YoloLedgerIOS-2026.10.31_12-02-58-+0800.xcresult`。
+- 真实 iCloud Drive／普通外部文件夹的双设备冲突交换、书签撤销，以及 iOS 系统实际调度 `BGAppRefreshTask` 仍需真机验收；模拟器构建通过不等于后台时机已验证。
+
 ## 喵喵样式重做验证（2026-10-28）
 
 - UI 模型 9 项测试通过，包含原有保存与失败语义，以及新增的日历筛选、浏览月份保留和保存后可见性。
@@ -85,7 +92,7 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild \
 - 最后调整底栏描边遮挡顺序与日历顶部留白后，`/tmp/yolo-ledger-meow-ios-navigation-final.xcresult` 的扩展导航用例通过，额外验证日期选择面板、账本菜单选项和取消；最新四页截图在上述目录的 `latest-navigation/` 中。最终 Mac 构建日志为 `/tmp/yolo-ledger-meow-macos-final-build.log`。
 - 第一轮仅账本重命名用例因测试点击旧输入框坐标未聚焦而失败，改为点击新输入框中心后第二轮全过；没有以修改业务数据绕过失败。
 - main 已核对本轮六类 iPhone 实际截图，视觉通过；Mac native 验证 Cmd+N、`12.34+7.66-5` 保存为 `15.00`、中文备注和日期筛选正常。Apple 子会话未使用系统 UI 自动化或将旧样式验收充作本轮结果。Mac 空态已单独使用左侧“记一笔”的平台文案。
-- Mac XCTest 未重跑：M1 的系统 automation mode 初始化曾超时；Mac 由 main 使用 native 操作。真机、正式最低系统、Release 分发、iCloud 尚未验收。
+- Mac XCTest 未重跑：M1 的系统 automation mode 初始化曾超时；Mac 由 main 使用 native 操作。真机、正式最低系统、Release 分发，以及真实 iCloud Drive 文件夹交换尚未验收。
 
 M2 重做前的验证保留于 [M2 验收记录](../../docs/m2-validation.md)及历史 `/tmp/yolo-ledger-m2-*.xcresult`，与本轮 UI 验收区分。
 

@@ -7,9 +7,9 @@
 - Mac、iPhone 的功能验收及验证记录。
 - 工程建立后的构建运行、快捷指令和备份恢复说明。
 
-- [工程边界、本地记账与 iCloud 同步](architecture.md)：共享包依赖、平台组装、M2 数据、持久化与同步边界。
+- [工程边界、本地记账与文件夹同步](architecture.md)：共享包依赖、平台组装、M2 数据、持久化与同步边界。
 - [品牌与图标](brand/README.md)：有落独立图标概念、语义、配色和源文件。
-- [iCloud 同步与用户可见目录方案](icloud-sync-plan.md)：双端统一标识、CloudKit 自动同步、iCloud Drive“有落”目录、迁移和验收设计。
+- [用户选定文件夹同步方案](icloud-sync-plan.md)：Personal Team 边界、iCloud Drive／普通目录选择、JSON 协议、冲突规则、权限与验收设计。
 - [iOS 快捷指令截图记账](screenshot-shortcut.md)：快捷指令配置、本地 OCR、确认保存流程、隐私边界和待验收项。
 - [M2 本地记账验收](m2-validation.md)：测试范围、实际 Mac 操作、iPhone 结果与未验收边界。
 - [历史 UI 验收](ui-validation.md)：此前页面覆盖、双端构建和交互回归；本地截图已清理。

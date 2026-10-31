@@ -1,216 +1,150 @@
-# iCloud 同步与用户可见目录方案
+# 用户选定文件夹同步方案
 
-## 1. 目标与结论
+## 1. 当前结论
 
-有落继续使用 SwiftData 作为本地数据库，通过 CloudKit 私有数据库在原生 iPhone 与 Mac App 之间自动同步；同时启用 iCloud Documents，在“文件”App 和 Finder 的 iCloud 云盘中提供用户可见的“有落”目录。
+有落的默认同步方案改为：本地 SwiftData + 用户选定文件夹交换。用户可在 iPhone 或 Mac 的“我的”页面选择 iCloud Drive 中的文件夹，也可以选择其他系统文件提供方或普通可写目录。
 
-当前结论如下：
-
-- iPhone 与 Mac 两个 Target 统一使用 Bundle ID：`com.yololedger.app`。
-- 两端共同使用 iCloud Container：`iCloud.com.yololedger.app`。
-- CloudKit 负责结构化账本数据的自动同步，不向用户暴露数据库文件。
-- iCloud Drive 显示名为“有落”的目录，用于备份、CSV、附件和其他用户可识别文件。
-- 不把运行中的 SwiftData / SQLite 数据库直接放入 iCloud Drive。
-- 不建立有落自己的登录系统，使用设备当前 Apple Account 的 iCloud 能力。
-- 当前只有测试数据，不采用两次正式发布的过渡方案，直接迁移为 CloudKit 兼容模型。
-- 远端数据导入后自动刷新界面，不要求用户手动点击同步。
+- 日常读写始终先落到各设备 App 容器内的 SwiftData 数据库，断网和未配置同步时仍可正常记账。
+- App 不申请 CloudKit、iCloud Container、推送或远程通知权限，因此可使用免费的 Apple Developer Personal Team 构建和安装。
+- 文件夹权限由系统选择器授予；App 保存安全作用域 bookmark，覆盖安装和重启后恢复访问。
+- 同步目录只保存版本化 JSON 交换文件，不保存正在运行的 SQLite、WAL 或 SHM。
+- 首次选择、App 启动、回到前台、本地数据变化和用户点击“立即同步”时尝试同步。
+- iOS 后台刷新属于 best-effort，由系统决定是否及何时执行，不能承诺实时同步。
 - iPadOS 暂不支持。
 
-当前实现进度：代码、entitlements、Info.plist 与双端 Target 配置已接入；Core 42 项、Storage 22 项、UI 10 项测试及 iPhone 模拟器导航冒烟通过，iOS 模拟器和 macOS Debug 构建通过，模拟器也已用正常 CloudKit 配置打开本地账库。共享容器注册、Development CloudKit Schema、真实 Apple Account、双设备同步和用户可见目录仍待签名环境验收，不能仅凭本地构建视为完成。
+CloudKit 仍可作为未来取得付费开发者账号后的可选方案，但不是当前 Target 的默认能力，也不影响本方案的文件格式和本地数据库。
 
-## 2. 整体结构
+## 2. 为什么采用该方案
+
+免费的 Personal Team 不支持 CloudKit、iCloud Documents App Container、iCloud Key-Value Storage 或推送权限，但 App 可以通过系统文件选择器访问用户主动选择的目录。用户如果在两台设备上选择同一个 iCloud Drive 文件夹，文件本身由 iCloud Drive 负责传输，有落负责读取、验证、合并和写回。
+
+这不是 CloudKit 的等价替代：系统文件传输和后台执行都没有实时保证。因此产品文案使用“尝试同步”“最近成功”，并保留明确的“立即同步”按钮。
+
+## 3. 数据结构
 
 ```text
 iPhone / Mac
-├── 本地 SwiftData
+├── App 容器
 │   └── Application Support/YoloLedger/ledger.store
+│       ├── 本地 SwiftData / SQLite
+│       ├── WAL / SHM
+│       └── 本地升级快照
 │
-└── iCloud.com.yololedger.app
-    ├── CloudKit Private Database
-    │   ├── BookRecord
-    │   ├── CategoryRecord
-    │   └── EntryRecord
-    │
-    └── iCloud Drive/有落（容器的 Documents 目录）
-        ├── 关于有落.txt
-        ├── 有落备份.yololedger
-        ├── 账单导出.csv
-        └── 后续附件
+└── 用户选择的文件夹
+    └── 有落同步数据/
+        └── devices/
+            ├── <安装 A 的 UUID>.json
+            └── <安装 B 的 UUID>.json
 ```
 
-每台设备仍保留一份本地数据库，读取和写入不依赖网络。CloudKit 在系统允许的时机上传本地变更、下载远端变更；iCloud Documents 是另一套文件同步能力，只承载用户能够识别和直接管理的文件。
+每个安装生成并持久化一个随机 UUID，仅用于区分交换文件，不使用设备名称、硬件标识、Apple Account 或其他个人信息。每台设备只原子替换自己的 JSON 文件，不覆盖其他设备文件。
 
-## 3. 标识与发布方式
+## 4. JSON 交换协议
 
-### 3.1 Bundle ID
+每个设备文件是一份完整合并快照，包含：
 
-两个平台统一为：
+- `formatVersion`：文件协议版本。
+- `schemaVersion`：本地数据模型版本。
+- `deviceID`：当前安装的随机 UUID，必须与文件名一致。
+- `generatedAt`：生成时间，使用带小数秒的 UTC ISO 8601。
+- `books`：账本 UUID、名称、顺序、创建／修改／删除时间。
+- `categories`：分类 UUID、名称、收支类型、顺序、创建／修改／删除时间。
+- `entries`：账目 UUID、账本／分类 UUID、金额分值、发生时间、备注、来源及创建／修改／删除时间。
 
-```text
-com.yololedger.app
-```
+读取时会检查格式版本、Schema 版本、文件名、UUID 唯一性、枚举值、时间、关联关系和金额字段。任何可见 JSON 损坏或版本不受支持时，本轮同步失败，并且不会把该批快照部分导入本地。
 
-iPhone 与 Mac 仍保留独立 Target、入口和平台适配代码。统一 Bundle ID 用于把两端作为 App Store Connect 中同一产品的多平台版本发布，并支持 Universal Purchase。
+写入使用同目录临时文件和原子替换，并通过系统文件协调 API 与 iCloud Drive 或其他文件提供方协作。临时文件失败时会清理，不留下半份正式 JSON。
 
-修改 Bundle ID 后，系统会把已经安装的旧测试 App 视为另一款 App，旧测试容器不会自动继承。由于当前只有测试数据，可重新安装并重新生成测试数据；正式发布后不再修改 Bundle ID。
+## 5. 合并与删除规则
 
-### 3.2 iCloud Container
+1. 先完整读取并验证目录中的全部设备快照。
+2. 将本地全部记录（包括软删除记录）和远端快照按业务 UUID 分组。
+3. 比较 `max(updatedAt, deletedAt)`，时间较新的记录获胜。
+4. 时间完全相同时，软删除优先，防止另一台设备把已删除记录复活。
+5. 仍相同时，使用稳定序列化字段和来源 `deviceID` 排序，保证不同设备得到相同结果。
+6. 账本、分类和账目在一次本地保存中应用；失败回滚本轮本地变更。
+7. 成功合并后，将完整结果写为当前设备的新快照。
 
-两个平台共同使用：
+缺少某台设备的文件不等于删除记录。软删除标记当前不会自动清理；以后增加压缩或墓碑回收时，需要先定义所有设备确认边界。
 
-```text
-iCloud.com.yololedger.app
-```
+## 6. 权限与隐私
 
-该标识是 iCloud 容器标识，不是用户看到的文件夹名称。创建前需要确认 Apple Developer 账户可以注册该标识；注册并用于正式环境后保持稳定。
+- 文件夹必须由用户通过系统选择器主动选择。
+- App 只保存系统 bookmark、文件夹显示名、安装随机 UUID 和最近同步摘要。
+- 每次同步前恢复 URL 并调用 `startAccessingSecurityScopedResource()`，结束后立即停止访问。
+- bookmark 过期时尝试更新；权限被撤销、目录被移动或文件提供方不可用时显示错误，要求用户重新选择。
+- 停止使用文件夹只删除本机保存的授权和状态，不删除文件夹中的交换文件，也不删除本地账目。
+- 同步文件是可读 JSON，不等同于加密备份。用户应选择自己的私有目录；将目录共享给他人会同时共享账目内容。
 
-## 4. 两类 iCloud 数据的职责
+## 7. 自动与手动时机
 
-| 能力 | 用途 | 用户能否直接看到 | 存储形式 |
-| --- | --- | --- | --- |
-| SwiftData 本地存储 | 离线读写、启动和本机缓存 | 否 | SQLite 主文件、WAL、SHM |
-| CloudKit Private Database | Mac 与 iPhone 的结构化数据同步 | 否 | CloudKit Schema 与 CKRecord |
-| iCloud Documents | 备份、导出、附件等用户文件 | 是 | 文件或文件包 |
+有落在以下时机触发一次合并：
 
-CloudKit 同步不是备份替代品：修改和删除也会传播到其他设备。独立备份导出与恢复仍需按 `TODO.md` 的 M4 任务实现。
+- 首次选择或更换文件夹后。
+- App 打开并恢复文件夹权限后。
+- App 从后台回到前台后。
+- 新增、编辑、删除账目或变更账本后，短暂去抖再同步。
+- 用户点击“立即同步”后。
+- iOS 系统授予后台刷新时间时。
 
-## 5. SwiftData 模型调整
+同一时刻只运行一个同步任务；期间再次发生变化时，当前任务结束后再补一次。同步失败不阻止本地记账，不会清空或重建本地数据库。
 
-当前 V1 模型的 `BookRecord.id`、`CategoryRecord.id`、`EntryRecord.id` 和 `StoreMetadata.key` 使用 `@Attribute(.unique)`。CloudKit 不支持 SwiftData 唯一约束，接入前需要调整。
+Mac 仅在 App 活跃时工作，不安装常驻守护进程。iOS 后台刷新由 `BGAppRefreshTask` 提交请求，但低电量、后台刷新关闭、系统资源不足、App 被用户强制退出等情况都会延迟或阻止执行。
 
-计划如下：
+## 8. 设置页状态
 
-1. 保留业务 UUID，但移除 `@Attribute(.unique)`。
-2. 由 Storage Repository 在创建和合并时检查业务 UUID，保证单机操作不产生重复数据。
-3. 为需要参与冲突判断的账本、分类和账目保留或补齐 `createdAt`、`updatedAt`、`deletedAt`。
-4. 删除优先采用软删除；确认多端收敛后再考虑物理清理。
-5. 所有 CloudKit 模型属性提供兼容的默认值或可选形式。
-6. 如后续增加 SwiftData 关系，关系必须可选并明确 inverse；不使用 CloudKit 不支持的 Deny 删除规则。
-7. 保留版本化 Schema 和升级前快照机制，但本轮允许清理现有测试库及 Development CloudKit 数据重新初始化。
+未配置时显示：
 
-## 6. 自动同步与界面刷新
+- 选择同步文件夹。
+- 说明可选择 iCloud Drive 或普通可写文件夹。
 
-SwiftData / CloudKit 的同步时机由系统决定，应用不能承诺“点击后立即同步”。有落应实现自动刷新：
+配置后显示：
 
-1. 启动时读取本地数据库并检查 iCloud 账户状态。
-2. 监听 CloudKit setup、import、export 事件。
-3. 远端 import 成功后，由 Storage 通知 UI 重新获取账本、分类和账目。
-4. App 从后台回到前台时再进行一次轻量刷新。
-5. 本地新增、编辑和删除完成后继续立即刷新当前界面，不等待云端确认。
+- 当前文件夹名称。
+- 正在同步、最近成功或错误状态。
+- 最近成功时间、本轮导入记录数和导出记录数。
+- 立即同步、更换文件夹、停止使用。
+- iPhone 后台同步由系统决定、不能保证实时的提示。
 
-设置页只显示状态，不提供不能保证生效的“立即同步”按钮。建议状态包括：
+这里没有“登录有落”或“登录 iCloud”的步骤。能否看到 iCloud Drive 取决于设备系统的 Apple Account 和 iCloud Drive 设置；有落只使用系统选择器返回的目录权限。
 
-- iCloud 可用，已开启自动同步。
-- 正在上传或下载。
-- 最近一次同步成功时间。
-- 未登录 Apple Account、iCloud 权限关闭、空间不足或服务暂时不可用。
-- 同步暂停时仍可在本机记账。
+## 9. 从旧 CloudKit 测试配置切换
 
-这里的“未登录”只指设备没有可用的 Apple Account / iCloud，不是有落账号。有落不新增独立账号体系。
+- 保持 iPhone 与 Mac 的 Bundle ID `com.yololedger.app` 不变。
+- 保持 `Application Support/YoloLedger/ledger.store` 路径不变，不删除现有本地数据。
+- 正常 App 的 SwiftData 配置改回 `.local`。
+- Target 移除 CloudKit、iCloud Documents、Push Notifications 和 Remote notifications 权限。
+- iPhone 保留 `NSFileProtectionComplete`；Mac 沙盒增加用户选择文件夹的读写权限。
+- 删除旧的 iCloud Container 启动初始化和 `NSUbiquitousContainers` 配置。
 
-## 7. 首次合并与冲突规则
+此前真实存在于本机 SwiftData 的记录会继续保留。尚未下载到本机、只存在于 CloudKit 远端的测试数据不会由文件夹方案自动迁移；当前项目尚未完成真实 CloudKit 双设备验收，因此不提供远端迁移工具。
 
-虽然当前只有测试数据，正式实现仍需建立可重复验证的规则：
+## 10. 验收标准
 
-- 使用业务 UUID 识别同一账本、分类和账目。
-- 相同 UUID 出现多个持久化对象时，以较新的 `updatedAt` 为主。
-- 时间相同时使用固定的稳定排序规则选择结果，避免不同设备得出不同结论。
-- `deletedAt` 晚于 `updatedAt` 时视为已删除。
-- 默认账本和内置分类使用稳定 UUID，并在远端导入后去重。
-- 定时记账后续使用“规则 ID + 周期 ID”作为幂等键，避免多设备生成同一笔账。
-- 冲突处理和去重放在 Storage 层，Core 只保存业务规则，UI 不直接处理 CloudKit Record。
+- 同一文件夹下，设备 A 新增后同步，设备 B 能导入并显示。
+- B 修改或删除后，A 再同步可收敛，删除记录不会复活。
+- 两台设备离线各自新增后，恢复文件可用时双方最终都包含两边记录。
+- 相同 UUID、相同时间的冲突在不同同步顺序下得到相同结果。
+- 损坏、不支持版本或关联无效的快照不会造成部分导入。
+- 同一设备文件通过临时文件原子替换，重开 App 后本地记录保持。
+- 覆盖安装保留本地账库、bookmark 和安装 UUID。
+- 目录失效或 iCloud Drive 暂不可用时，本地新增、编辑和删除仍正常。
+- iPhone 与 Mac 均能选择目录、立即同步、恢复权限和停止使用。
+- Personal Team 构建不再请求不受支持的 iCloud、CloudKit 或推送 entitlement。
 
-## 8. 用户可见的“有落”目录
+## 11. 已知边界
 
-在 iOS 与 macOS Target 中启用 iCloud Documents，并在 `Info.plist` 为 `iCloud.com.yololedger.app` 配置：
+- 文件传输是否完成由 iCloud Drive 或所选文件提供方决定；“同步成功”表示本轮成功读取当前可见文件并写回本设备快照，不保证另一台设备已经下载。
+- 后台刷新不是定时器，也不是实时推送。
+- 交换 JSON 当前未做额外端到端加密。
+- 本方案不是历史备份；删除和修改会传播。独立的可恢复备份仍按 M4 实现。
+- 文件数量会随安装数量增加；设备管理、过期设备清理和墓碑压缩属于后续功能。
 
-```xml
-<key>NSUbiquitousContainers</key>
-<dict>
-    <key>iCloud.com.yololedger.app</key>
-    <dict>
-        <key>NSUbiquitousContainerIsDocumentScopePublic</key>
-        <true/>
-        <key>NSUbiquitousContainerName</key>
-        <string>有落</string>
-        <key>NSUbiquitousContainerSupportedFolderLevels</key>
-        <string>Any</string>
-    </dict>
-</dict>
-```
+## 12. Apple 参考
 
-应用需要创建容器中的 `Documents` 目录，并至少写入一个用户文档后，系统才会在 iCloud 云盘中显示“有落”。容器元数据变更时需要提升 App 的 build 版本。
-
-目录中可以放置：
-
-- 完整备份文件，例如 `有落备份-2026-10-30.yololedger`。
-- CSV 或其他可交换格式的账单导出。
-- 后续由用户添加并能够直接识别的附件。
-
-目录中不得放置：
-
-- 正在运行的 `ledger.store`。
-- `ledger.store-wal`、`ledger.store-shm`。
-- 可重新生成的缓存、临时文件和内部状态文件。
-
-如果未来允许用户在“文件”App中直接打开 `.yololedger` 文件，需要再声明自定义 UTType、支持 Open in Place，并通过 `UIDocument`、`NSDocument` 或文件协调 API 安全读写。
-
-## 9. 工程配置
-
-两个 App Target 均需关联同一容器，并配置：
-
-- iCloud：CloudKit。
-- iCloud：iCloud Documents。
-- Push Notifications。
-- Background Modes：Remote notifications。
-- 对应的 iCloud Container、服务和环境 entitlements。
-
-SwiftData 配置从本地模式：
-
-```swift
-cloudKitDatabase: .none
-```
-
-改为显式私有数据库：
-
-```swift
-cloudKitDatabase: .private("iCloud.com.yololedger.app")
-```
-
-测试仍需支持注入 `.none` 或独立测试账库，避免单元测试读写真实 iCloud。
-
-## 10. 开发与上线顺序
-
-1. 统一两个 Target 的 Bundle ID。
-2. 创建并关联共享 iCloud Container。
-3. 调整 SwiftData Schema，移除唯一约束并补齐同步字段。
-4. 更新 Storage 配置并初始化 Development CloudKit Schema。
-5. 接入同步状态监听和 UI 自动刷新。
-6. 实现业务 UUID 去重、软删除和冲突规则。
-7. 发布用户可见的“有落”iCloud Documents 目录。
-8. 完成模拟器、真机 iPhone 和真实 Mac 的双端验证。
-9. 在 CloudKit Console 检查 Development Schema。
-10. 上线前将 Schema 部署到 Production；生产 Schema 只做向前兼容的新增，不删除或重命名既有类型和字段。
-
-## 11. 验收标准
-
-- iPhone 离线新增账目，恢复网络后自动出现在 Mac。
-- Mac 修改账目后，iPhone 无需手动同步即可刷新。
-- 两端同时新增、修改或删除时结果符合确定的冲突规则。
-- 默认账本、分类和相同 UUID 的账目不会重复显示。
-- 没有 Apple Account、关闭 iCloud 或服务暂时不可用时，本地记账仍正常。
-- iCloud 空间不足时显示可理解的状态，不清空本地数据。
-- 覆盖安装、重启和重新登录 iCloud 后数据保持完整。
-- “文件”App 和 Finder 的 iCloud 云盘中能够看到“有落”目录及导出文件。
-- 用户删除可见备份文件不会直接删除 CloudKit 中的当前账目。
-- Development 与 Production 环境分别完成验证。
-
-## 12. 官方参考
-
-- [Apple：添加多平台版本与 Universal Purchase](https://developer.apple.com/help/app-store-connect/create-an-app-record/add-platforms/)
-- [Apple：准备多平台 App 发布](https://developer.apple.com/documentation/xcode/preparing-your-app-for-distribution)
-- [Apple：SwiftData 跨设备同步](https://developer.apple.com/documentation/swiftdata/syncing-model-data-across-a-persons-devices)
-- [Apple：配置 iCloud 服务](https://developer.apple.com/documentation/xcode/configuring-icloud-services)
-- [Apple：同步 iCloud Documents 并发布公开目录](https://developer.apple.com/documentation/uikit/synchronizing-documents-in-the-icloud-environment)
-- [Apple：iOS 存储最佳实践](https://developer.apple.com/videos/play/tech-talks/204/)
-- [Apple：调试 NSPersistentCloudKitContainer 同步](https://developer.apple.com/documentation/technotes/tn3164-debugging-the-synchronization-of-nspersistentcloudkitcontainer)
+- [Apple：Accessing documents](https://developer.apple.com/documentation/uikit/view_controllers/providing_access_to_directories)
+- [Apple：Managing Documents in Your iOS Apps](https://developer.apple.com/documentation/uikit/managing-documents-in-your-ios-apps)
+- [Apple：URL security-scoped resources](https://developer.apple.com/documentation/foundation/url/startaccessingsecurityscopedresource())
+- [Apple：NSFileCoordinator](https://developer.apple.com/documentation/foundation/nsfilecoordinator)
+- [Apple：Using background tasks](https://developer.apple.com/documentation/backgroundtasks/using-background-tasks)
+- [Apple：Supported capabilities for free and paid accounts](https://developer.apple.com/help/account/reference/supported-capabilities-ios)
