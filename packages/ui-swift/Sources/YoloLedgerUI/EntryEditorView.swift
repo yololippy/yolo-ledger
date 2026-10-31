@@ -223,6 +223,7 @@ struct EntryEditorView: View {
         }
         .padding(.horizontal, 11)
         .padding(.vertical, inputCardVerticalPadding)
+        .fixedSize(horizontal: false, vertical: true)
         .paperCard()
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("editor.input-card")

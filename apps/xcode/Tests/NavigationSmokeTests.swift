@@ -58,11 +58,13 @@ final class NavigationSmokeTests: XCTestCase {
         XCTAssertTrue(noteField.waitForExistence(timeout: 5))
         XCTAssertTrue(amountLabel.waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["editor.amount"].exists)
+        let customKeypadInputHeight = inputCard.frame.height
         inputCard.coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.5)).tap()
 
         XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["editor.keypad-return"].exists)
         XCTAssertTrue(keypadOne.waitForNonExistence(timeout: 5))
+        XCTAssertEqual(inputCard.frame.height, customKeypadInputHeight, accuracy: 1)
 
         let note = "右侧金额区备注"
         noteField.typeText(note)
