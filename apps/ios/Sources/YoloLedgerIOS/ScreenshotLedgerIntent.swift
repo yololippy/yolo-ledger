@@ -6,7 +6,7 @@ import YoloLedgerCore
 
 struct ScreenshotLedgerIntent: AppIntent {
     static let title: LocalizedStringResource = "截图记账"
-    static let description = IntentDescription("识别支付截图中的金额、商户和时间，并在有落中确认后记账。图片只在设备上处理。")
+    static let description = IntentDescription("识别支付截图中的金额、商户和时间，打开确认页后记账。图片只在设备上处理。")
     static var openAppWhenRun: Bool { true }
 
     @Parameter(
@@ -133,7 +133,7 @@ private enum ScreenshotLedgerIntentError: LocalizedError {
         case .imageTooLarge: "截图文件过大，请先裁剪后重试。"
         case .unreadableImage: "无法读取这张截图，请换一张清晰图片。"
         case .noText: "截图中没有识别到文字。"
-        case .cannotPrepareConfirmation: "识别结果暂时无法交给有落，请重试。"
+        case .cannotPrepareConfirmation: "识别结果暂时无法交给\(YoloLedgerProduct.displayName)，请重试。"
         }
     }
 }

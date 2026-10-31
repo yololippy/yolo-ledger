@@ -4,6 +4,8 @@ Swift Package、library product 和模块名均为 `YoloLedgerCore`，目录为 
 
 本模块承载双端共享的领域模型、业务规则和接口，不依赖 SwiftUI、SwiftData 或其他本仓库 Package。
 
+`YoloLedgerProduct` 集中提供运行时产品元数据，包括中英文名称、组合显示名、同步目录名、快捷指令名称和本地数据目录名。UI、Storage 与双端 App 入口直接引用这些派生值；修改产品名称时不再逐个修改运行时代码。
+
 ## 兼容的 M1 契约
 
 - `LedgerBook: Identifiable, Equatable, Sendable`：包含只读 `id: UUID` 和 `name: String`，通过 `public init(id:name:)` 创建。标识由调用方提供。

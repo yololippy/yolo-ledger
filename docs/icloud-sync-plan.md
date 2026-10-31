@@ -2,7 +2,7 @@
 
 ## 1. 当前结论
 
-有落的默认同步方案改为：本地 SwiftData + 用户选定文件夹交换。用户可在 iPhone 或 Mac 的“我的”页面选择 iCloud Drive 中的文件夹，也可以选择其他系统文件提供方或普通可写目录。
+有落记账的默认同步方案改为：本地 SwiftData + 用户选定文件夹交换。用户可在 iPhone 或 Mac 的“我的”页面选择 iCloud Drive 中的文件夹，也可以选择其他系统文件提供方或普通可写目录。
 
 - 日常读写始终先落到各设备 App 容器内的 SwiftData 数据库，断网和未配置同步时仍可正常记账。
 - App 不申请 CloudKit、iCloud Container、推送或远程通知权限，因此可使用免费的 Apple Developer Personal Team 构建和安装。
@@ -16,7 +16,7 @@ CloudKit 仍可作为未来取得付费开发者账号后的可选方案，但�
 
 ## 2. 为什么采用该方案
 
-免费的 Personal Team 不支持 CloudKit、iCloud Documents App Container、iCloud Key-Value Storage 或推送权限，但 App 可以通过系统文件选择器访问用户主动选择的目录。用户如果在两台设备上选择同一个 iCloud Drive 文件夹，文件本身由 iCloud Drive 负责传输，有落负责读取、验证、合并和写回。
+免费的 Personal Team 不支持 CloudKit、iCloud Documents App Container、iCloud Key-Value Storage 或推送权限，但 App 可以通过系统文件选择器访问用户主动选择的目录。用户如果在两台设备上选择同一个 iCloud Drive 文件夹，文件本身由 iCloud Drive 负责传输，有落记账负责读取、验证、合并和写回。
 
 这不是 CloudKit 的等价替代：系统文件传输和后台执行都没有实时保证。因此产品文案使用“尝试同步”“最近成功”，并保留明确的“立即同步”按钮。
 
@@ -31,7 +31,7 @@ iPhone / Mac
 │       └── 本地升级快照
 │
 └── 用户选择的文件夹
-    └── 有落同步数据/
+    └── 有落记账同步数据/
         └── devices/
             ├── <安装 A 的 UUID>.json
             └── <安装 B 的 UUID>.json
@@ -78,7 +78,7 @@ iPhone / Mac
 
 ## 7. 自动与手动时机
 
-有落在以下时机触发一次合并：
+有落记账在以下时机触发一次合并：
 
 - 首次选择或更换文件夹后。
 - App 打开并恢复文件夹权限后。
@@ -106,7 +106,7 @@ Mac 仅在 App 活跃时工作，不安装常驻守护进程。iOS 后台刷新�
 - 立即同步、更换文件夹、停止使用。
 - iPhone 后台同步由系统决定、不能保证实时的提示。
 
-这里没有“登录有落”或“登录 iCloud”的步骤。能否看到 iCloud Drive 取决于设备系统的 Apple Account 和 iCloud Drive 设置；有落只使用系统选择器返回的目录权限。
+这里没有“登录有落记账”或“登录 iCloud”的步骤。能否看到 iCloud Drive 取决于设备系统的 Apple Account 和 iCloud Drive 设置；有落记账只使用系统选择器返回的目录权限。
 
 ## 9. 从旧 CloudKit 测试配置切换
 

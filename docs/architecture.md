@@ -1,6 +1,6 @@
 # 工程边界、本地记账与文件夹同步
 
-有落使用两个原生 App 入口和三个共享 Swift Packages。M1 建立双端导航骨架，M2 在同一依赖结构中接入本地手动记账。
+有落记账使用两个原生 App 入口和三个共享 Swift Packages。M1 建立双端导航骨架，M2 在同一依赖结构中接入本地手动记账。
 
 ## 依赖与组装
 
@@ -28,7 +28,7 @@ flowchart TD
 - 账目包含稳定 UUID、账本与分类标识、方向、金额、日期、备注、来源及创建／修改时间。编辑保留原 ID、来源和创建时间。
 - Core 定义初始账本与常用收入／支出分类的稳定标识。它们是 M2 初始选项，不代表已经核实喵喵记账的默认分类和账本行为。
 - 仓库验证账本、分类存在和分类方向一致后再写入。保存显式落盘；失败回滚未保存变更并向调用方抛出错误。初始化使用独立标记，只执行一次，不覆盖已有名称。
-- App 使用 `SwiftDataLedgerRepository.defaultStoreURL()`，默认位于本机应用容器的 `Application Support/YoloLedger/ledger.store`。读写始终落到本机；用户选择文件夹后，Storage 通过 `有落同步数据/devices/<device UUID>.json` 交换完整快照。
+- App 使用 `SwiftDataLedgerRepository.defaultStoreURL()`，默认位于本机应用容器的 `Application Support/YoloLedger/ledger.store`。读写始终落到本机；用户选择文件夹后，Storage 通过 `有落记账同步数据/devices/<device UUID>.json` 交换完整快照。
 - 账本、分类和账目保留业务 UUID。Storage 在读取和写入边界去重；账目删除使用 `deletedAt` 软删除，冲突以较新的修改／删除时间、墓碑优先及稳定排序收敛。
 - Core 只暴露平台中立的文件夹同步契约和状态，不依赖文件权限、SwiftData 或 SwiftUI。App 恢复安全作用域 bookmark，Storage 成功合并后通知 UI 重新读取。
 - iPhone 与 Mac Target 不申请 CloudKit、iCloud Documents 或推送能力；iPhone 使用系统允许时机的 best-effort 后台刷新，Mac 只在 App 活跃时同步。
@@ -44,4 +44,4 @@ flowchart TD
 
 M2 以新增、编辑、删除、列表刷新及重开保留形成手动记账闭环。完整分类管理、周／年统计界面、导入导出、定时记账和备份恢复仍属后续里程碑。文件夹同步已完成本地双 Store 自动测试及双端构建；真实 iCloud Drive 双设备、权限撤销和 iPhone 后台调度仍需设备环境验收。
 
-iPhone 与 Mac 后续使用有落自己的品牌和交互设计；历史参考界面只保留为旧实现记录。开发进度、实际通过的测试和未验收范围以根目录 [TODO](../TODO.md) 为准。
+iPhone 与 Mac 后续使用有落记账的品牌和交互设计；历史参考界面只保留为旧实现记录。开发进度、实际通过的测试和未验收范围以根目录 [TODO](../TODO.md) 为准。

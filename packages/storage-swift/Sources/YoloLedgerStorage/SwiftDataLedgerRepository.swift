@@ -24,7 +24,7 @@ public struct SwiftDataLedgerRepository: LedgerRepository, LedgerFolderSyncing {
             appropriateFor: nil,
             create: true
         )
-        .appendingPathComponent("YoloLedger", isDirectory: true)
+        .appendingPathComponent(YoloLedgerProduct.applicationSupportDirectoryName, isDirectory: true)
         .appendingPathComponent("ledger.store", isDirectory: false)
     }
 

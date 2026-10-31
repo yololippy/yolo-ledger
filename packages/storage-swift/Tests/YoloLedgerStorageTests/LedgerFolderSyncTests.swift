@@ -5,6 +5,19 @@ import YoloLedgerCore
 @testable import YoloLedgerStorage
 
 struct LedgerFolderSyncTests {
+    @Test func snapshotPathUsesCurrentProductDirectoryName() {
+        let deviceID = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
+        let selectedFolder = URL(fileURLWithPath: "/tmp/yolo-ledger-sync-test", isDirectory: true)
+
+        let snapshotURL = LedgerFolderSnapshotIO.snapshotFileURL(
+            in: selectedFolder,
+            deviceID: deviceID
+        )
+
+        #expect(snapshotURL.deletingLastPathComponent().lastPathComponent == "devices")
+        #expect(snapshotURL.deletingLastPathComponent().deletingLastPathComponent().lastPathComponent == YoloLedgerProduct.syncDirectoryName)
+    }
+
     @Test @MainActor func twoStoresExchangeCreateUpdateAndDeletion() async throws {
         let fixture = FolderSyncTestFixture()
         defer { fixture.remove() }

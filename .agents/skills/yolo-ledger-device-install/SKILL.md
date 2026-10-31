@@ -3,7 +3,7 @@ name: yolo-ledger-device-install
 description: "在 yolo-ledger 中构建、安装并验证 iPhone 真机 Debug 版。用于用户要求安装到已连接手机、重新安装真机包或启动真机应用；不用于模拟器、发布归档或 App Store 分发。"
 ---
 
-# 有落 iPhone 真机安装
+# 有落记账 iPhone 真机安装
 
 为当前工作树构建 `YoloLedgerIOS` Debug 版，安装到用户明确要求的已连接 iPhone，并区分报告“构建成功”“安装成功”和“启动成功”。先读取仓库根目录 `AGENTS.md`；本流程不授权修改功能、证书、Git 远端或提交记录。
 

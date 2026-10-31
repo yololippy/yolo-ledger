@@ -3,7 +3,7 @@ name: yolo-ledger-coordination
 description: "在 yolo-ledger 中由 main 协调 Core、Storage、Apple 开发会话，按目录分工、收取结果并集成验收。用于本仓库的多会话开发和分工确认，不用于应用内记账调度。"
 ---
 
-# 有落开发协作
+# 有落记账开发协作
 
 用户与 `main` 对话，由 main 协调同一仓库中的三个角色会话。先读取根目录 [AGENTS.md](../../../AGENTS.md)、[TODO.md](../../../TODO.md)，派活前查看 [会话登记](references/team.md) 中的 ID、工作目录和当前授权阶段。
 
@@ -51,4 +51,4 @@ description: "在 yolo-ledger 中由 main 协调 Core、Storage、Apple 开发�
 - Core：账本、分类、收支记录、精确金额与本地日期规则，以及异步 CRUD 契约和核心测试。先固定公开契约，再由 main 通知使用方。
 - Storage：验证并接入 SwiftData 本地存储，提供磁盘仓库、版本化 schema、初始化数据及 CRUD，验证重开保留和失败处理。
 - Apple：接入共享表单、列表、账本选择与基础汇总；双端入口组装真实存储，执行双端构建及 iPhone 完整记账流程测试。
-- main：协调契约、审阅集成、验证 Mac 操作、更新根文档和 TODO。M2 不包含 iCloud、完整分类管理、定时规则或导入导出；后续界面按有落独立设计推进。
+- main：协调契约、审阅集成、验证 Mac 操作、更新根文档和 TODO。M2 不包含 iCloud、完整分类管理、定时规则或导入导出；后续界面按有落记账独立设计推进。

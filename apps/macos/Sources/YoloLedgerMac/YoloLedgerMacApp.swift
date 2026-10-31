@@ -1,11 +1,12 @@
 import SwiftUI
+import YoloLedgerCore
 
 @main
 struct YoloLedgerMacApp: App {
     @State private var bootstrap = LedgerAppBootstrap()
 
     var body: some Scene {
-        Window("有落", id: "main") {
+        Window(YoloLedgerProduct.displayName, id: "main") {
             LedgerAppContent(bootstrap: bootstrap)
                 .frame(minWidth: 720, minHeight: 460)
         }

@@ -11,17 +11,19 @@
 | YoloLedgerMacUITests | Mac 导航测试 target | com.yololedger.app.macos.uitests |
 | YoloLedgerIOSUITests | iPhone 导航及记账流程测试 | com.yololedger.app.ios.uitests |
 
-显示名“有落”，英文名 `YoloLedger`。iOS 仅面向 iPhone，关闭 iPad、Mac Catalyst、Designed for iPhone on Mac 和 Vision 兼容入口；Mac 使用独立原生 target。
+显示名“有落记账”，英文名 `YoloLedger`。iOS 仅面向 iPhone，关闭 iPad、Mac Catalyst、Designed for iPhone on Mac 和 Vision 兼容入口；Mac 使用独立原生 target。
+
+品牌与构建元数据集中在 `Configuration/Brand.xcconfig`：App 显示名、英文名、Bundle ID、后台任务标识和版本号由双端 Target 共用。运行时代码中的中英文名称、同步目录、快捷指令名称和本地数据目录集中在 `YoloLedgerProduct.swift`，界面及存储模块不再重复写死这些字符串。
 
 `Support/LedgerAppBootstrap.swift` 同时编入两个 App，长期持有 `SwiftDataLedgerRepository` 并注入共享 UI。默认位置为各 App 容器的 `Application Support/YoloLedger/ledger.store`。打开失败显示错误和重试，不回退内存、不清库、不调用 fatalError。正常 App 使用纯本地 SwiftData 账库；UI 测试参数使用独立账库，并跳过真实书签恢复和后台调度。
 
 两个 App Target 不再申请 CloudKit、iCloud Documents、推送或远程通知能力。“我的”页面由用户选择 iCloud Drive 或普通可写文件夹，App 保存 security-scoped bookmark 和随机、稳定的安装设备 ID；每次文件读写都在安全访问期间内执行。选定、启动、回到前台和本地写入后会尝试同步；同一时刻只有一个同步任务。iPhone 额外使用 best-effort `BGAppRefreshTask`，系统决定何时执行；Mac 仅在 App 活跃时执行。
 
-`Resources/Assets.xcassets` 同时编入 iPhone 与 Mac Target，`AppIcon` 使用已选定的有落亮系统蓝图标；iOS 使用 1024 × 1024 master，macOS 使用同一源图生成的标准多尺寸资源。
+`Resources/Assets.xcassets` 同时编入 iPhone 与 Mac Target，`AppIcon` 使用已选定的有落记账亮系统蓝图标；iOS 使用 1024 × 1024 master，macOS 使用同一源图生成的标准多尺寸资源。
 
 iPhone target 通过 `Configuration/YoloLedgerIOS.entitlements` 将默认数据保护设为 `NSFileProtectionComplete`，存储层同时处理既有数据库文件。Bundle ID 和 `Application Support` 相对路径保持稳定；SwiftData 以版本化 schema 打开，版本变化前先创建不覆盖的本地升级快照。
 
-当前已有本地新增收支、编辑、确认删除、基本账本管理、月收支汇总与日历筛选。当前界面是功能验证期的历史临时实现；后续按有落自己的品牌与交互重做，不再以其他记账产品为设计规范。功能与状态见 [UI 模块](../../packages/ui-swift/README.md)。
+当前已有本地新增收支、编辑、确认删除、基本账本管理、月收支汇总与日历筛选。当前界面是功能验证期的历史临时实现；后续按有落记账的品牌与交互重做，不再以其他记账产品为设计规范。功能与状态见 [UI 模块](../../packages/ui-swift/README.md)。
 
 工具 Xcode 27.1（27A9275）、Swift 6。临时构建基线 macOS 14 / iOS 17，正式最低支持范围待确定。Mac 与模拟器使用本地 ad-hoc 签名，无个人团队或证书；真机另行配置与验收。
 

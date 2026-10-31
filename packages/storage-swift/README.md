@@ -19,7 +19,7 @@ let books = try await repository.fetchBooks()
 
 公开初始化接口：
 
-- `init(storeURL:syncMode:) throws`：打开指定的真实磁盘数据库；默认 `.local`，文件夹同步不依赖 CloudKit 或 iCloud entitlement。旧的 `YoloLedgerICloud.syncMode` 配置保留给未来方案评估，当前文件同步不使用它。
+- `init(storeURL:syncMode:) throws`：打开指定的真实磁盘数据库；默认 `.local`，文件夹同步不依赖 CloudKit 或 iCloud entitlement。若未来重新评估 CloudKit，由组装层显式传入容器标识，不在存储层重复保存产品标识。
 - `static func defaultStoreURL() throws -> URL`：生成当前 App 容器中的 `Application Support/YoloLedger/ledger.store` 路径。
 - `storeURL: URL`：记录实际打开的文件地址。
 
@@ -51,7 +51,7 @@ let report = try await repository.synchronize(
 ```
 
 - SwiftData 本地库始终是运行时真源。同步目录只保存交换快照，不包含 `ledger.store`、SQLite、WAL 或 SHM。
-- 交换位置为 `有落同步数据/devices/<device UUID>.json`。每个安装只覆盖自己的快照，不删除其他设备文件；缺少某台设备的文件不表示删除数据。
+- 交换位置为 `有落记账同步数据/devices/<device UUID>.json`。每个安装只覆盖自己的快照，不删除其他设备文件；缺少某台设备的文件不表示删除数据。
 - JSON 协议当前为 `formatVersion: 1`、`schemaVersion: 1.1.0`，使用排序键、缩进和带 9 位小数秒的 UTC ISO 8601 日期。快照包含账本、分类、账目的全部持久化字段及软删除时间。
 - 每轮先通过 `NSFileCoordinator` 读取并完整解码所有设备快照，检查文件名／deviceID、版本、重复 UUID、枚举值、时间、账目引用和收支类型。任何损坏或不支持版本都会在修改本地前明确失败。
 - 合并以业务 UUID 为键，比较 `max(updatedAt, deletedAt)`；时间相同先选 tombstone，再按完整稳定字段和来源 deviceID 确定结果。tombstone 会继续导出，避免缺文件或旧快照让删除数据复活。

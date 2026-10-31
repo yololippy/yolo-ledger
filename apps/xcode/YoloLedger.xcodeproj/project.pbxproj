@@ -69,6 +69,12 @@
 			"path" = "Configuration/YoloLedgerMac.entitlements";
 			"sourceTree" = "<group>";
 		};
+		"A7C19E423B5D4F6A8C0E2D41" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "text.xcconfig";
+			"path" = "Configuration/Brand.xcconfig";
+			"sourceTree" = "<group>";
+		};
 		"3A9B2EFD84612ACCA2F2C156" = {
 			"isa" = "PBXFileReference";
 			"lastKnownFileType" = "sourcecode.swift";
@@ -145,8 +151,6 @@
 			"buildSettings" = {
 				"ASSETCATALOG_COMPILER_APPICON_NAME" = "AppIcon";
 				"CODE_SIGN_STYLE" = "Automatic";
-				"CURRENT_PROJECT_VERSION" = "1";
-				"MARKETING_VERSION" = "0.1.0";
 				"GENERATE_INFOPLIST_FILE" = "NO";
 				"PRODUCT_NAME" = "$(TARGET_NAME)";
 				"SWIFT_EMIT_LOC_STRINGS" = "NO";
@@ -158,7 +162,7 @@
 				"ENABLE_HARDENED_RUNTIME" = "YES";
 				"CODE_SIGN_ENTITLEMENTS" = "Configuration/YoloLedgerMac.entitlements";
 				"INFOPLIST_FILE" = "Configuration/Mac-Info.plist";
-				"PRODUCT_BUNDLE_IDENTIFIER" = "com.yololedger.app";
+				"PRODUCT_BUNDLE_IDENTIFIER" = "$(YOLO_LEDGER_BUNDLE_IDENTIFIER)";
 			};
 			"name" = "Debug";
 		};
@@ -167,8 +171,6 @@
 			"buildSettings" = {
 				"ASSETCATALOG_COMPILER_APPICON_NAME" = "AppIcon";
 				"CODE_SIGN_STYLE" = "Automatic";
-				"CURRENT_PROJECT_VERSION" = "1";
-				"MARKETING_VERSION" = "0.1.0";
 				"GENERATE_INFOPLIST_FILE" = "NO";
 				"PRODUCT_NAME" = "$(TARGET_NAME)";
 				"SWIFT_EMIT_LOC_STRINGS" = "NO";
@@ -180,7 +182,7 @@
 				"ENABLE_HARDENED_RUNTIME" = "YES";
 				"CODE_SIGN_ENTITLEMENTS" = "Configuration/YoloLedgerMac.entitlements";
 				"INFOPLIST_FILE" = "Configuration/Mac-Info.plist";
-				"PRODUCT_BUNDLE_IDENTIFIER" = "com.yololedger.app";
+				"PRODUCT_BUNDLE_IDENTIFIER" = "$(YOLO_LEDGER_BUNDLE_IDENTIFIER)";
 			};
 			"name" = "Release";
 		};
@@ -262,7 +264,7 @@
 				"CODE_SIGN_STYLE" = "Automatic";
 				"GENERATE_INFOPLIST_FILE" = "YES";
 				"PRODUCT_NAME" = "$(TARGET_NAME)";
-				"PRODUCT_BUNDLE_IDENTIFIER" = "com.yololedger.app.macos.uitests";
+				"PRODUCT_BUNDLE_IDENTIFIER" = "$(YOLO_LEDGER_BUNDLE_IDENTIFIER).macos.uitests";
 				"TEST_TARGET_NAME" = "YoloLedgerMac";
 				"SDKROOT" = "macosx";
 				"SUPPORTED_PLATFORMS" = "macosx";
@@ -279,7 +281,7 @@
 				"CODE_SIGN_STYLE" = "Automatic";
 				"GENERATE_INFOPLIST_FILE" = "YES";
 				"PRODUCT_NAME" = "$(TARGET_NAME)";
-				"PRODUCT_BUNDLE_IDENTIFIER" = "com.yololedger.app.macos.uitests";
+				"PRODUCT_BUNDLE_IDENTIFIER" = "$(YOLO_LEDGER_BUNDLE_IDENTIFIER).macos.uitests";
 				"TEST_TARGET_NAME" = "YoloLedgerMac";
 				"SDKROOT" = "macosx";
 				"SUPPORTED_PLATFORMS" = "macosx";
@@ -404,8 +406,6 @@
 				"ASSETCATALOG_COMPILER_APPICON_NAME" = "AppIcon";
 				"CODE_SIGN_ENTITLEMENTS" = "Configuration/YoloLedgerIOS.entitlements";
 				"CODE_SIGN_STYLE" = "Automatic";
-				"CURRENT_PROJECT_VERSION" = "1";
-				"MARKETING_VERSION" = "0.1.0";
 				"GENERATE_INFOPLIST_FILE" = "NO";
 				"PRODUCT_NAME" = "$(TARGET_NAME)";
 				"SWIFT_EMIT_LOC_STRINGS" = "NO";
@@ -418,7 +418,7 @@
 				"SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD" = "NO";
 				"CODE_SIGN_IDENTITY[sdk=iphonesimulator*]" = "-";
 				"INFOPLIST_FILE" = "Configuration/IOS-Info.plist";
-				"PRODUCT_BUNDLE_IDENTIFIER" = "com.yololedger.app";
+				"PRODUCT_BUNDLE_IDENTIFIER" = "$(YOLO_LEDGER_BUNDLE_IDENTIFIER)";
 			};
 			"name" = "Debug";
 		};
@@ -428,8 +428,6 @@
 				"ASSETCATALOG_COMPILER_APPICON_NAME" = "AppIcon";
 				"CODE_SIGN_ENTITLEMENTS" = "Configuration/YoloLedgerIOS.entitlements";
 				"CODE_SIGN_STYLE" = "Automatic";
-				"CURRENT_PROJECT_VERSION" = "1";
-				"MARKETING_VERSION" = "0.1.0";
 				"GENERATE_INFOPLIST_FILE" = "NO";
 				"PRODUCT_NAME" = "$(TARGET_NAME)";
 				"SWIFT_EMIT_LOC_STRINGS" = "NO";
@@ -442,7 +440,7 @@
 				"SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD" = "NO";
 				"CODE_SIGN_IDENTITY[sdk=iphonesimulator*]" = "-";
 				"INFOPLIST_FILE" = "Configuration/IOS-Info.plist";
-				"PRODUCT_BUNDLE_IDENTIFIER" = "com.yololedger.app";
+				"PRODUCT_BUNDLE_IDENTIFIER" = "$(YOLO_LEDGER_BUNDLE_IDENTIFIER)";
 			};
 			"name" = "Release";
 		};
@@ -524,7 +522,7 @@
 				"CODE_SIGN_STYLE" = "Automatic";
 				"GENERATE_INFOPLIST_FILE" = "YES";
 				"PRODUCT_NAME" = "$(TARGET_NAME)";
-				"PRODUCT_BUNDLE_IDENTIFIER" = "com.yololedger.app.ios.uitests";
+				"PRODUCT_BUNDLE_IDENTIFIER" = "$(YOLO_LEDGER_BUNDLE_IDENTIFIER).ios.uitests";
 				"TEST_TARGET_NAME" = "YoloLedgerIOS";
 				"SDKROOT" = "iphoneos";
 				"SUPPORTED_PLATFORMS" = "iphoneos iphonesimulator";
@@ -543,7 +541,7 @@
 				"CODE_SIGN_STYLE" = "Automatic";
 				"GENERATE_INFOPLIST_FILE" = "YES";
 				"PRODUCT_NAME" = "$(TARGET_NAME)";
-				"PRODUCT_BUNDLE_IDENTIFIER" = "com.yololedger.app.ios.uitests";
+				"PRODUCT_BUNDLE_IDENTIFIER" = "$(YOLO_LEDGER_BUNDLE_IDENTIFIER).ios.uitests";
 				"TEST_TARGET_NAME" = "YoloLedgerIOS";
 				"SDKROOT" = "iphoneos";
 				"SUPPORTED_PLATFORMS" = "iphoneos iphonesimulator";
@@ -595,6 +593,7 @@
 		"0652E436F42D75F5672A8BD9" = {
 			"isa" = "PBXGroup";
 			"children" = (
+				"A7C19E423B5D4F6A8C0E2D41",
 				"B15295CB15D455993A3D897C",
 				"93E664E68B3813E48C4CF877",
 				"27A50C836AC8195C0653EF72",
@@ -643,6 +642,7 @@
 		};
 		"ED8772ADEC3A6C25161BC957" = {
 			"isa" = "XCBuildConfiguration";
+			"baseConfigurationReference" = "A7C19E423B5D4F6A8C0E2D41";
 			"buildSettings" = {
 				"CLANG_ENABLE_MODULES" = "YES";
 				"SWIFT_VERSION" = "6.0";
@@ -657,6 +657,7 @@
 		};
 		"00F209874A1F7309F6DCEAA7" = {
 			"isa" = "XCBuildConfiguration";
+			"baseConfigurationReference" = "A7C19E423B5D4F6A8C0E2D41";
 			"buildSettings" = {
 				"CLANG_ENABLE_MODULES" = "YES";
 				"SWIFT_VERSION" = "6.0";

@@ -391,7 +391,14 @@ private enum FolderSyncAccessError: LocalizedError {
 #if os(iOS)
 @MainActor
 enum FolderSyncBackgroundTasks {
-    static let identifier = "com.yololedger.app.folder-sync-refresh"
+    static let identifier: String = {
+        guard let identifiers = Bundle.main.object(
+            forInfoDictionaryKey: "BGTaskSchedulerPermittedIdentifiers"
+        ) as? [String], let identifier = identifiers.first else {
+            preconditionFailure("Missing BGTaskSchedulerPermittedIdentifiers")
+        }
+        return identifier
+    }()
     private static weak var bootstrap: LedgerAppBootstrap?
     private static var isRegistered = false
 

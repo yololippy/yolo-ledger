@@ -71,7 +71,7 @@ struct LedgerFolderSnapshot: Codable, Equatable, Sendable {
 }
 
 enum LedgerFolderSnapshotIO {
-    static let rootDirectoryName = "有落同步数据"
+    static let rootDirectoryName = YoloLedgerProduct.syncDirectoryName
     static let devicesDirectoryName = "devices"
 
     static func readAll(from folderURL: URL) throws -> [LedgerFolderSnapshot] {

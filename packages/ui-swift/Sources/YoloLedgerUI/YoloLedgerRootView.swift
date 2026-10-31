@@ -129,7 +129,7 @@ public struct YoloLedgerRootView: View {
         #if os(macOS)
         HStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 14) {
-                Text("有落").font(.system(size: 30, weight: .heavy, design: .rounded)).padding(.bottom, 2)
+                Text(YoloLedgerProduct.displayName).font(.system(size: 30, weight: .heavy, design: .rounded)).padding(.bottom, 2)
                 Text("把生活，一笔笔留下").font(.caption).foregroundStyle(theme.muted).padding(.bottom, 20)
                 ForEach(LedgerDestination.allCases) { destination in
                     Button { selection = destination } label: {
@@ -140,7 +140,7 @@ public struct YoloLedgerRootView: View {
                 }
                 Spacer()
                 addButton
-                Text("YoloLedger · 离线可用").font(.caption2).foregroundStyle(theme.muted)
+                Text("\(YoloLedgerProduct.englishName) · 离线可用").font(.caption2).foregroundStyle(theme.muted)
             }.padding(22).frame(width: 195).background(theme.primarySoft)
             Rectangle().fill(theme.ink).frame(width: 1)
             destinationView.frame(maxWidth: .infinity)
@@ -490,7 +490,7 @@ private struct LedgerProfileView: View {
                 Text("我的").font(.system(size: 23,weight: .bold))
                 HStack(spacing: 18) {
                     Image(systemName: "book.pages").font(.system(size: 34,weight: .light)).frame(width: 70,height: 70).background(theme.primarySoft,in: Circle()).overlay { Circle().stroke(theme.ink,lineWidth: 1.5) }
-                    VStack(alignment: .leading,spacing: 6) { Text("有落").font(.title2.bold()); Text("把生活，一笔笔留下").font(.caption).foregroundStyle(theme.muted) }
+                    VStack(alignment: .leading,spacing: 6) { Text(YoloLedgerProduct.displayName).font(.title2.bold()); Text("把生活，一笔笔留下").font(.caption).foregroundStyle(theme.muted) }
                 }.padding(.vertical, 12)
                 folderSyncCard
                 #if os(iOS)
@@ -498,8 +498,8 @@ private struct LedgerProfileView: View {
                     Label("轻点两下，截图记账", systemImage: "hand.tap")
                         .font(.headline)
                     DashedRule()
-                    shortcutStep(number: 1, text: "在快捷指令中新建“有落截图记账”")
-                    shortcutStep(number: 2, text: "依次加入“截取屏幕”和有落“截图记账”")
+                    shortcutStep(number: 1, text: "在快捷指令中新建“\(YoloLedgerProduct.screenshotShortcutName)”")
+                    shortcutStep(number: 2, text: "依次加入“截取屏幕”和“\(YoloLedgerProduct.displayName)”的“截图记账”")
                     shortcutStep(number: 3, text: "前往设置 → 辅助功能 → 触控 → 轻点背面 → 轻点两下，选择该快捷指令")
                     Button {
                         guard let url = URL(string: "shortcuts://") else { return }
@@ -517,7 +517,7 @@ private struct LedgerProfileView: View {
                 .accessibilityElement(children: .contain)
                 .accessibilityIdentifier("settings.back-tap-guide")
                 #endif
-                Text("有落 · YoloLedger").font(.caption).foregroundStyle(theme.muted).frame(maxWidth: .infinity).padding(.top, 15)
+                Text(YoloLedgerProduct.displayNameWithEnglish).font(.caption).foregroundStyle(theme.muted).frame(maxWidth: .infinity).padding(.top, 15)
             }.padding(24).frame(maxWidth: 700).frame(maxWidth: .infinity)
         }
         .confirmationDialog("停止使用这个同步文件夹？", isPresented: $confirmsStop, titleVisibility: .visible) {

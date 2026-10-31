@@ -8,25 +8,26 @@ struct LedgerFolderSyncControllerTests {
     @Test
     func presentationCoversUnconfiguredSyncingSuccessAndFailure() {
         let controller = LedgerFolderSyncController()
+        let folderName = "\(YoloLedgerProduct.displayName)同步"
         #expect(!controller.isConfigured)
         #expect(controller.detail.contains("iCloud Drive"))
 
-        controller.update(folderName: "有落同步", state: .syncing)
+        controller.update(folderName: folderName, state: .syncing)
         #expect(controller.isConfigured)
         #expect(controller.isSynchronizing)
-        #expect(controller.title == "有落同步")
+        #expect(controller.title == folderName)
 
         let report = LedgerFolderSyncReport(
             importedRecordCount: 3,
             exportedRecordCount: 5,
             completedAt: Date(timeIntervalSince1970: 1_800_000_000)
         )
-        controller.reportSuccessfulSync(folderName: "有落同步", report: report)
+        controller.reportSuccessfulSync(folderName: folderName, report: report)
         #expect(controller.successfulSyncRevision == 1)
         #expect(controller.detail.contains("导入 3 条"))
         #expect(controller.detail.contains("导出 5 条"))
 
-        controller.update(folderName: "有落同步", state: .failed(message: "权限已撤销。"))
+        controller.update(folderName: folderName, state: .failed(message: "权限已撤销。"))
         #expect(controller.detail.contains("本地账目不受影响"))
     }
 

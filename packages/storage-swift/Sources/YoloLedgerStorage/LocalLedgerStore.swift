@@ -6,13 +6,6 @@ public enum LedgerSyncMode: Equatable, Sendable {
     case iCloudPrivate(containerIdentifier: String)
 }
 
-public enum YoloLedgerICloud {
-    public static let containerIdentifier = "iCloud.com.yololedger.app"
-    public static let syncMode: LedgerSyncMode = .iCloudPrivate(
-        containerIdentifier: containerIdentifier
-    )
-}
-
 public enum LedgerStorageError: Error, Equatable, Sendable, LocalizedError {
     case invalidStoreURL
     case invalidStoredValue(entity: String, field: String)

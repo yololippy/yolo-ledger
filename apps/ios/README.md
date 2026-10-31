@@ -8,7 +8,7 @@
 
 `ScreenshotLedgerIntent.swift` 提供 iOS 快捷指令“截图记账”：通过 Vision 在设备端 OCR，将结构化候选结果暂存并打开共享记账确认页。原图不写入账库；完整配置与验收边界见 [快捷指令截图记账说明](../../docs/screenshot-shortcut.md)。
 
-“我的”页面提供“轻点两下，截图记账”配置入口。用户首次在快捷指令中组合“截取屏幕 → 有落截图记账”，再到系统“轻点背面”绑定；iOS 不允许 App 自动修改该系统设置。
+“我的”页面提供“轻点两下，截图记账”配置入口。用户首次在快捷指令中组合“截取屏幕 → 有落记账截图”，再到系统“轻点背面”绑定；iOS 不允许 App 自动修改该系统设置。
 
 Bundle ID：`com.yololedger.app`，与 Mac Target 保持一致。`TARGETED_DEVICE_FAMILY=1`，关闭 Mac Catalyst、Designed for iPhone on Mac 和 Vision 兼容入口。工程临时构建基线为 iOS 17，正式最低支持版本仍待确定。
 
