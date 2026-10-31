@@ -42,42 +42,14 @@ final class NavigationSmokeTests: XCTestCase {
     }
 
     #if os(iOS)
-    func testMeowImportPreviewBackupAndSuccessFlow() throws {
+    func testMeowImportCardIsHiddenAfterOneTimeMigration() throws {
         let app = makeApplication()
-        app.launchArguments.append("--ui-test-meow-import")
         app.launch()
 
         navigate(app, destination: "settings", title: "我的")
-        let chooseButton = app.buttons["settings.meow-import.choose"]
-        XCTAssertTrue(chooseButton.waitForExistence(timeout: 15))
-        chooseButton.tap()
-
-        XCTAssertTrue(app.staticTexts["导入预览"].waitForExistence(timeout: 10))
-        XCTAssertTrue(app.staticTexts["已读取 2 个 CSV；确认前不会写入本地账库。"].exists)
-        XCTAssertTrue(app.descendants(matching: .any)["meow-import.metrics"].firstMatch.exists)
-        XCTAssertTrue(app.descendants(matching: .any)["meow-import.safety"].firstMatch.exists)
-        XCTAssertFalse(app.descendants(matching: .any)["meow-import.issues"].firstMatch.exists)
-
-        let confirmButton = app.buttons["meow-import.confirm"]
-        XCTAssertTrue(confirmButton.waitForExistence(timeout: 5))
-        XCTAssertTrue(confirmButton.isEnabled)
-        confirmButton.tap()
-
-        XCTAssertTrue(app.staticTexts["导入完成"].waitForExistence(timeout: 15))
-        XCTAssertTrue(app.staticTexts["已导入 2 笔，跳过 1 笔已存在记录。"].exists)
-        app.buttons["meow-import.done"].tap()
-
-        app.terminate()
-        app.launch()
-        navigate(app, destination: "books", title: "账本")
-        let importedBook = app.buttons.matching(
-            NSPredicate(format: "identifier BEGINSWITH %@ AND label == %@", "book.select.", "日常")
-        ).firstMatch
-        XCTAssertTrue(importedBook.waitForExistence(timeout: 10))
-        importedBook.tap()
-        navigate(app, destination: "details", title: "明细")
-        XCTAssertTrue(entryButton(app, note: "脱敏午餐").waitForExistence(timeout: 10))
-        XCTAssertTrue(entryButton(app, note: "脱敏工资").waitForExistence(timeout: 10))
+        XCTAssertTrue(app.otherElements["settings.folder-sync.card"].waitForExistence(timeout: 15))
+        XCTAssertFalse(app.otherElements["settings.meow-import.card"].exists)
+        XCTAssertFalse(app.buttons["settings.meow-import.choose"].exists)
     }
 
     func testTappingAmountAreaFocusesNoteAndRestoresKeypad() throws {

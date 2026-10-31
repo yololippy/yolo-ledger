@@ -534,7 +534,6 @@ private struct LedgerProfileView: View {
                     VStack(alignment: .leading,spacing: 6) { Text(YoloLedgerProduct.displayName).font(.title2.bold()); Text("把生活，一笔笔留下").font(.caption).foregroundStyle(theme.muted) }
                 }.padding(.vertical, 12)
                 folderSyncCard
-                meowImportCard
                 #if os(iOS)
                 VStack(alignment: .leading, spacing: 16) {
                     Label("轻点两下，截图记账", systemImage: "hand.tap")
