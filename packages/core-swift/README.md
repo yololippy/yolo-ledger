@@ -60,6 +60,23 @@ func currentSyncState() -> LedgerSyncState
 - `LedgerError` 提供具体错误及中文 `LocalizedError` 提示。数据库读写错误由 Storage 继续抛出，成功与失败由调用方反馈。
 - `LedgerSyncState` 表达纯本地、检查中、可用、同步中、暂停和错误；`updates()` 在远端变化或同步状态变化后通知 UI 重新读取。Core 只定义抽象状态，不依赖 CloudKit。
 
+### 用户选定文件夹同步契约
+
+免费 Personal Team 场景下，Core 通过独立的 `LedgerFolderSyncing` 固定用户选定文件夹同步的最小接口，不扩张 `LedgerRepository` 的本地 CRUD 职责：
+
+```swift
+func synchronize(
+    folderURL: URL,
+    deviceID: UUID
+) async throws -> LedgerFolderSyncReport
+```
+
+- `folderURL` 是 Apple 平台层已经取得访问权限的用户选定目录；安全作用域 bookmark、权限恢复、文件协调和目录选择 UI 不进入 Core。
+- `deviceID` 是 App 为当前安装生成并持久化的稳定 UUID，不使用硬件标识或个人信息。
+- `LedgerFolderSyncReport` 返回本轮导入记录数、导出记录数和绝对完成时间；`LedgerFolderSyncState` 提供未配置、待机、同步中、成功和失败五类平台中立 UI 状态。
+- 本地 SwiftData 始终是运行时真源，文件夹只是设备间交换层。Storage 负责文件格式、原子写入、读取校验，以及按业务 UUID 和 `updatedAt` / `deletedAt` 合并；Core 不依赖 SwiftData、CloudKit 或 SwiftUI。
+- 目录同步与现有 `LedgerSyncState` 分开表达：前者是用户主动配置的文件交换通道，后者保留现有仓库存储／云同步状态契约。
+
 ### 日期范围与最小汇总
 
 - `LedgerPeriod`：`.day`、`.week`、`.month`、`.year`。
@@ -94,7 +111,7 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test --package-pa
 
 Manifest 使用 `swift-tools-version: 6.0`，Swift 语言模式为 6。临时构建基线为 macOS 14 / iOS 17；产品最低支持系统版本仍待 main 确认。
 
-验证记录（2026-10-31）：使用指定 Xcode 的 Swift 6.4 / arm64 环境运行上述测试命令，构建通过，**59 项测试全部通过**。其中 10 项脱敏文字规则测试覆盖实付与优惠竞争、储值卡扣款与现金实付为零、普通订单退款服务、商户与分类、真实退款收入、日期／时间／订单号过滤、整数金额、待确认结果编码、行程截图中的“数字 + 元”、退款差额、广告金额和“今天 HH:mm”，以及银行账单中的负号金额与分行商户字段；另有 7 项原图 Vision 集成测试逐张验证滴滴、天猫超市、Dickies、爱康账单、网咖账单、京东订单和网约车截图的完整识别结果；原有 42 项继续覆盖金额、表达式、汇总、本地日期范围、DST、关联校验和分类种子。
+验证记录（2026-10-31）：使用指定 Xcode 的 Swift 6.4 / arm64 环境运行上述测试命令，构建通过，**62 项测试全部通过**。其中 3 项文件夹同步契约测试覆盖目录 URL 与稳定设备 UUID 的传递、报告值和完整 UI 状态；10 项脱敏文字规则测试覆盖实付与优惠竞争、储值卡扣款与现金实付为零、普通订单退款服务、商户与分类、真实退款收入、日期／时间／订单号过滤、整数金额、待确认结果编码、行程截图中的“数字 + 元”、退款差额、广告金额和“今天 HH:mm”，以及银行账单中的负号金额与分行商户字段；另有 7 项原图 Vision 集成测试逐张验证滴滴、天猫超市、Dickies、爱康账单、网咖账单、京东订单和网约车截图的完整识别结果；原有 42 项继续覆盖金额、表达式、汇总、本地日期范围、DST、关联校验和分类种子。
 
 ## 后续业务约定
 
