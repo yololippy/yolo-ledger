@@ -42,6 +42,98 @@ final class NavigationSmokeTests: XCTestCase {
     }
 
     #if os(iOS)
+    func testTappingAmountAreaFocusesNoteAndRestoresKeypad() throws {
+        let app = makeApplication()
+        app.launch()
+
+        XCTAssertTrue(app.buttons["entry.add"].waitForExistence(timeout: 15))
+        app.buttons["entry.add"].tap()
+        let keypadOne = app.buttons["keypad.1"]
+        XCTAssertTrue(keypadOne.waitForExistence(timeout: 10))
+
+        let inputCard = app.descendants(matching: .any)["editor.input-card"].firstMatch
+        let noteField = app.textFields["editor.note"]
+        let amountLabel = app.staticTexts["editor.amount"]
+        XCTAssertTrue(inputCard.waitForExistence(timeout: 5))
+        XCTAssertTrue(noteField.waitForExistence(timeout: 5))
+        XCTAssertTrue(amountLabel.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["editor.amount"].exists)
+        inputCard.coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.5)).tap()
+
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["editor.keypad-return"].exists)
+        XCTAssertTrue(keypadOne.waitForNonExistence(timeout: 5))
+
+        let note = "右侧金额区备注"
+        noteField.typeText(note)
+        XCTAssertEqual(noteField.value as? String, note)
+        tapKeyboardDone(app)
+
+        XCTAssertTrue(keypadOne.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 5))
+        XCTAssertEqual(noteField.value as? String, note)
+    }
+
+    func testCalendarCardHorizontalSwipeChangesMonthPastThreshold() throws {
+        let app = makeApplication()
+        app.launch()
+
+        let monthTitle = app.buttons["month.title"]
+        let calendarCard = app.descendants(matching: .any)["calendar.card"].firstMatch
+        let calendarPager = app.descendants(matching: .any)["calendar.pager"].firstMatch
+        XCTAssertTrue(monthTitle.waitForExistence(timeout: 15))
+        XCTAssertTrue(calendarCard.waitForExistence(timeout: 5))
+        XCTAssertTrue(calendarPager.waitForExistence(timeout: 5))
+        guard let initialMonth = monthTitle.value as? String else {
+            return XCTFail("年月标题缺少可读值")
+        }
+        let selectedDay = app.buttons["calendar.day.15"]
+        XCTAssertTrue(selectedDay.waitForExistence(timeout: 5))
+        selectedDay.tap()
+        XCTAssertTrue(selectedDay.isSelected)
+
+        calendarCard.swipeLeft()
+        let movedForward = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "value != %@", initialMonth),
+            object: monthTitle
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [movedForward], timeout: 5), .completed)
+        assertValue(calendarPager, contains: "idle,next,gesture,1")
+        XCTAssertFalse(app.buttons["calendar.day.15"].isSelected)
+        guard let nextMonth = monthTitle.value as? String else {
+            return XCTFail("左滑后年月标题缺少可读值")
+        }
+
+        let shortDragStart = calendarCard.coordinate(withNormalizedOffset: CGVector(dx: 0.48, dy: 0.5))
+        let shortDragEnd = calendarCard.coordinate(withNormalizedOffset: CGVector(dx: 0.56, dy: 0.5))
+        shortDragStart.press(forDuration: 0.05, thenDragTo: shortDragEnd)
+        XCTAssertEqual(monthTitle.value as? String, nextMonth)
+        assertValue(calendarPager, contains: "idle,bounce,gesture,1")
+
+        calendarCard.swipeRight()
+        let movedBack = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "value == %@", initialMonth),
+            object: monthTitle
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [movedBack], timeout: 5), .completed)
+        assertValue(calendarPager, contains: "idle,previous,gesture,2")
+
+        app.buttons["month.next"].tap()
+        let buttonMovedForward = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "value != %@", initialMonth),
+            object: monthTitle
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [buttonMovedForward], timeout: 5), .completed)
+        assertValue(calendarPager, contains: "idle,next,button,3")
+        app.buttons["month.previous"].tap()
+        let buttonMovedBack = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "value == %@", initialMonth),
+            object: monthTitle
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [buttonMovedBack], timeout: 5), .completed)
+        assertValue(calendarPager, contains: "idle,previous,button,4")
+    }
+
     func testMonthPickerBrowsesYearsAndUpdatesBothViews() throws {
         let app = makeApplication()
         app.launch()
@@ -53,23 +145,52 @@ final class NavigationSmokeTests: XCTestCase {
         monthTitle.tap()
 
         XCTAssertTrue(app.buttons["month-picker.year-toggle"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["month-picker.close"].exists)
+        XCTAssertFalse(app.buttons["month-picker.close"].exists)
         XCTAssertTrue(app.buttons["month-picker.month.\(currentMonth)"].isSelected)
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.12)).tap()
+        XCTAssertTrue(app.buttons["month-picker.year-toggle"].waitForNonExistence(timeout: 3))
+        monthTitle.tap()
+        XCTAssertTrue(app.buttons["month-picker.year-toggle"].waitForExistence(timeout: 5))
+        let yearPager = app.descendants(matching: .any)["month-picker.year-pager"].firstMatch
+        XCTAssertTrue(yearPager.waitForExistence(timeout: 5))
         attachScreenshot(app, name: "month-picker-months")
 
         let monthGrid = app.descendants(matching: .any)["month-picker.month-grid"].firstMatch
         XCTAssertTrue(monthGrid.waitForExistence(timeout: 5))
+        let shortDragStart = monthGrid.coordinate(withNormalizedOffset: CGVector(dx: 0.48, dy: 0.5))
+        let shortDragEnd = monthGrid.coordinate(withNormalizedOffset: CGVector(dx: 0.56, dy: 0.5))
+        shortDragStart.press(forDuration: 0.05, thenDragTo: shortDragEnd)
+        XCTAssertTrue(app.buttons["month-picker.year-toggle"].exists)
+        XCTAssertTrue(app.buttons["month-picker.year-toggle"].label.contains(String(currentYear)))
+        assertValue(yearPager, contains: "idle,bounce,gesture,0")
+
         let diagonalStart = monthGrid.coordinate(withNormalizedOffset: CGVector(dx: 0.82, dy: 0.35))
         let diagonalEnd = monthGrid.coordinate(withNormalizedOffset: CGVector(dx: 0.18, dy: 0.55))
         diagonalStart.press(forDuration: 0.1, thenDragTo: diagonalEnd)
-        XCTAssertTrue(app.buttons["month-picker.close"].exists)
+        XCTAssertTrue(app.buttons["month-picker.year-toggle"].exists)
         XCTAssertTrue(app.buttons["month-picker.year-toggle"].label.contains(String(currentYear + 1)))
         XCTAssertFalse(app.buttons["month-picker.month.\(currentMonth)"].isSelected)
+        assertValue(yearPager, contains: "idle,next,gesture,1")
         attachScreenshot(app, name: "month-picker-other-year-no-highlight")
         monthGrid.swipeRight()
         XCTAssertTrue(app.buttons["month-picker.year-toggle"].label.contains(String(currentYear)))
         XCTAssertTrue(app.buttons["month-picker.month.\(currentMonth)"].isSelected)
-        monthGrid.swipeLeft()
+        assertValue(yearPager, contains: "idle,previous,gesture,2")
+
+        app.buttons["month-picker.year.next"].tap()
+        let nextYear = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "label CONTAINS %@", String(currentYear + 1)),
+            object: app.buttons["month-picker.year-toggle"]
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [nextYear], timeout: 5), .completed)
+        assertValue(yearPager, contains: "idle,next,button,3")
+        app.buttons["month-picker.year.previous"].tap()
+        let restoredYear = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "label CONTAINS %@", String(currentYear)),
+            object: app.buttons["month-picker.year-toggle"]
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [restoredYear], timeout: 5), .completed)
+        assertValue(yearPager, contains: "idle,previous,button,4")
 
         app.buttons["month-picker.current"].tap()
         XCTAssertTrue(app.buttons["month-picker.year-toggle"].waitForExistence(timeout: 5))
@@ -78,6 +199,25 @@ final class NavigationSmokeTests: XCTestCase {
 
         app.buttons["month-picker.year-toggle"].tap()
         XCTAssertTrue(app.staticTexts["month-picker.year-range"].waitForExistence(timeout: 5))
+        let rangePager = app.descendants(matching: .any)["month-picker.range-pager"].firstMatch
+        let yearGrid = app.descendants(matching: .any)["month-picker.year-grid"].firstMatch
+        XCTAssertTrue(rangePager.waitForExistence(timeout: 5))
+        XCTAssertTrue(yearGrid.waitForExistence(timeout: 5))
+        let initialRange = app.staticTexts["month-picker.year-range"].label
+        yearGrid.swipeLeft()
+        let nextRange = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "label != %@", initialRange),
+            object: app.staticTexts["month-picker.year-range"]
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [nextRange], timeout: 5), .completed)
+        assertValue(rangePager, contains: "idle,next,gesture,1")
+        yearGrid.swipeRight()
+        let restoredRange = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "label == %@", initialRange),
+            object: app.staticTexts["month-picker.year-range"]
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [restoredRange], timeout: 5), .completed)
+        assertValue(rangePager, contains: "idle,previous,gesture,2")
         attachScreenshot(app, name: "month-picker-years")
         app.buttons["month-picker.back-to-months"].tap()
         XCTAssertTrue(app.buttons["month-picker.year-toggle"].waitForExistence(timeout: 5))
@@ -85,6 +225,7 @@ final class NavigationSmokeTests: XCTestCase {
 
         let previousPageLastYear = currentYear - currentYear % 10 - 1
         app.buttons["month-picker.range.previous"].tap()
+        assertValue(rangePager, contains: "idle,previous,button,1")
         let targetYear = app.buttons["month-picker.year.\(previousPageLastYear)"]
         XCTAssertTrue(targetYear.waitForExistence(timeout: 5))
         targetYear.tap()
@@ -101,9 +242,10 @@ final class NavigationSmokeTests: XCTestCase {
         XCTAssertTrue((billMonthTitle.value as? String)?.contains(String(previousPageLastYear)) == true)
         XCTAssertTrue((billMonthTitle.value as? String)?.contains("1月") == true)
         billMonthTitle.tap()
-        XCTAssertTrue(app.buttons["month-picker.close"].waitForExistence(timeout: 5))
-        app.buttons["month-picker.close"].tap()
-        XCTAssertFalse(app.buttons["month-picker.close"].waitForExistence(timeout: 1))
+        XCTAssertTrue(app.buttons["month-picker.year-toggle"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["month-picker.close"].exists)
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.12)).tap()
+        XCTAssertTrue(app.buttons["month-picker.year-toggle"].waitForNonExistence(timeout: 3))
     }
 
     func testScreenshotCategoriesAreSelectableIncludingLastRowAndIncome() throws {
@@ -173,7 +315,7 @@ final class NavigationSmokeTests: XCTestCase {
         typeAmount(app, expression: "64.20")
         app.textFields["editor.note"].tap()
         app.textFields["editor.note"].typeText("选中日期新增验证")
-        app.buttons["editor.keypad-return"].tap()
+        tapKeyboardDone(app)
         app.buttons["editor.save"].tap()
 
         XCTAssertTrue(selectedDay.waitForExistence(timeout: 10))
@@ -191,7 +333,7 @@ final class NavigationSmokeTests: XCTestCase {
         typeAmount(app, expression: "28.00")
         app.textFields["editor.note"].tap()
         app.textFields["editor.note"].typeText("午饭")
-        app.buttons["editor.keypad-return"].tap()
+        tapKeyboardDone(app)
         app.buttons["editor.save"].tap()
         XCTAssertTrue(entryButton(app, note: "午饭").waitForExistence(timeout: 10))
 
@@ -220,7 +362,7 @@ final class NavigationSmokeTests: XCTestCase {
             typeAmount(app, expression: amount)
             app.textFields["editor.note"].tap()
             app.textFields["editor.note"].typeText(note)
-            app.buttons["editor.keypad-return"].tap()
+            tapKeyboardDone(app)
             app.buttons["editor.save"].tap()
             let row = entryButton(app, note: note)
             XCTAssertTrue(row.waitForExistence(timeout: 10))
@@ -263,12 +405,12 @@ final class NavigationSmokeTests: XCTestCase {
         typeAmount(app, expression: "1.234")
         app.buttons["editor.save"].tap()
         XCTAssertTrue(app.staticTexts["editor.error"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["editor.amount"].label.contains("1.234"))
+        XCTAssertTrue(app.staticTexts["editor.amount"].label.contains("1.234"))
         typeAmount(app, expression: "12.34+7.66-5", clearing: 5)
         attachScreenshot(app, name: "05-editor-calculator")
         app.textFields["editor.note"].tap()
         app.textFields["editor.note"].typeText("UI测试早餐")
-        app.buttons["editor.keypad-return"].tap()
+        tapKeyboardDone(app)
         app.buttons["editor.save"].tap()
         let created = entryButton(app, note: "UI测试早餐")
         XCTAssertTrue(created.waitForExistence(timeout: 10))
@@ -296,7 +438,7 @@ final class NavigationSmokeTests: XCTestCase {
         XCTAssertTrue(app.buttons["keypad.2"].waitForExistence(timeout: 10))
         typeAmount(app, expression: "23.45", clearing: 5)
         clearAndType(app.textFields["editor.note"], text: "UI测试修改早餐")
-        app.buttons["editor.keypad-return"].tap()
+        tapKeyboardDone(app)
         app.buttons["editor.save"].tap()
         XCTAssertTrue(app.staticTexts["detail.amount"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["detail.amount"].label.contains("23.45"))
@@ -349,7 +491,7 @@ final class NavigationSmokeTests: XCTestCase {
         typeAmount(app, expression: "28.88")
         app.textFields["editor.note"].tap()
         app.textFields["editor.note"].typeText("UI测试工资")
-        app.buttons["editor.keypad-return"].tap()
+        tapKeyboardDone(app)
         app.buttons["editor.save"].tap()
         XCTAssertTrue(entryButton(app, note: "UI测试工资").waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["summary.income"].label.contains("28.88"))
@@ -399,7 +541,7 @@ final class NavigationSmokeTests: XCTestCase {
                 typeAmount(app, expression: "88.66")
                 app.textFields["editor.note"].tap()
                 app.textFields["editor.note"].typeText(note)
-                app.buttons["editor.keypad-return"].tap()
+                tapKeyboardDone(app)
                 app.buttons["editor.save"].tap()
             }
             XCTAssertTrue(fixture.waitForExistence(timeout: 10))
@@ -420,6 +562,14 @@ final class NavigationSmokeTests: XCTestCase {
     private func typeAmount(_ app: XCUIApplication, expression: String, clearing: Int = 0) {
         for _ in 0..<clearing { app.buttons["keypad.delete"].tap() }
         for character in expression { app.buttons["keypad.\(character)"].tap() }
+    }
+
+    private func tapKeyboardDone(_ app: XCUIApplication) {
+        let doneButton = app.keyboards.firstMatch.descendants(matching: .any).matching(
+            NSPredicate(format: "label IN %@", ["完成", "Done", "done"])
+        ).firstMatch
+        XCTAssertTrue(doneButton.waitForExistence(timeout: 5), "系统键盘缺少完成键")
+        doneButton.tap()
     }
 
     private func entryButton(_ app: XCUIApplication, note: String) -> XCUIElement {
@@ -463,5 +613,13 @@ final class NavigationSmokeTests: XCTestCase {
         attachment.name = name
         attachment.lifetime = .keepAlways
         add(attachment)
+    }
+
+    private func assertValue(_ element: XCUIElement, contains expected: String, timeout: TimeInterval = 5) {
+        let expectation = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "value CONTAINS %@", expected),
+            object: element
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [expectation], timeout: timeout), .completed)
     }
 }

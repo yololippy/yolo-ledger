@@ -32,7 +32,6 @@ struct MonthPickerButton: View {
                 .presentationDetents([.height(392)])
                 .presentationDragIndicator(.hidden)
                 .presentationBackground(theme.primarySoft.opacity(0.55))
-                .interactiveDismissDisabled()
         }
         #else
         .popover(isPresented: $isPresented, arrowEdge: .bottom) {
@@ -96,21 +95,6 @@ private struct MonthPickerView: View {
         .padding(.bottom, bottomPadding)
         .foregroundStyle(theme.ink)
         .background(theme.primarySoft.opacity(0.55).ignoresSafeArea())
-        .overlay(alignment: .topTrailing) {
-            Button {
-                dismiss()
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 12, weight: .bold))
-                    .frame(width: 36, height: 36)
-                    .background(theme.surface.opacity(0.78), in: Circle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("关闭月份选择")
-            .accessibilityIdentifier("month-picker.close")
-            .padding(.top, 2)
-            .padding(.trailing, 12)
-        }
     }
 
     private var monthPager: some View {

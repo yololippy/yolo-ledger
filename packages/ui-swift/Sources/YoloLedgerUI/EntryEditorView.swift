@@ -167,20 +167,9 @@ struct EntryEditorView: View {
             }
             HStack(spacing: 9) {
                 Image(systemName: "pencil.line").font(.system(size: 19)).frame(width: 30)
-                HStack(spacing: 6) {
-                    TextField("点击输入备注…",text: $note).textFieldStyle(.plain).font(.system(size: 13)).focused($noteFocused).submitLabel(.done).onSubmit { noteFocused = false }.accessibilityIdentifier("editor.note")
-                    #if os(macOS)
-                    TextField("0.00",text: $amountText).textFieldStyle(.plain).multilineTextAlignment(.trailing).font(.system(size: 25,design: .rounded)).frame(maxWidth: 210).accessibilityLabel("金额").accessibilityIdentifier("editor.amount")
-                    #else
-                    Button { noteFocused = false } label: {
-                        Text("¥\(amountText.isEmpty ? "0.00" : amountText)").font(.system(size: 27,weight: .regular,design: .rounded)).lineLimit(1).minimumScaleFactor(0.4).frame(minWidth: 90,maxWidth: 180,alignment: .trailing)
-                    }.buttonStyle(.plain).accessibilityIdentifier("editor.amount").accessibilityLabel("金额 \(amountText.isEmpty ? "0.00" : amountText)")
-                    #endif
-                }.padding(.horizontal,11).padding(.vertical,13).paperCard()
+                entryInputCard
             }
-            if hidesKeypad {
-                Button("收起键盘，继续记账") { noteFocused = false }.font(.system(size: 13,weight: .medium)).frame(maxWidth: .infinity).padding(.vertical,10).accessibilityIdentifier("editor.keypad-return")
-            } else {
+            if !hidesKeypad {
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(),spacing: 10),count: 4),spacing: 9) {
                     ForEach(["7","8","9","date","4","5","6","+","1","2","3","-",".","0","delete","save"],id: \.self) { key in
                         keypadButton(key)
@@ -190,6 +179,53 @@ struct EntryEditorView: View {
         }.padding(.horizontal,14).padding(.top,13).padding(.bottom,10)
             .background(keypadBackground.ignoresSafeArea(edges: .bottom))
             .overlay(alignment: .top) { Rectangle().fill(theme.ink).frame(height: 1.4) }
+    }
+
+    @ViewBuilder
+    private var entryInputCard: some View {
+        #if os(iOS)
+        entryInputCardContent
+            .contentShape(Rectangle())
+            .simultaneousGesture(TapGesture().onEnded { noteFocused = true })
+        #else
+        entryInputCardContent
+        #endif
+    }
+
+    private var entryInputCardContent: some View {
+        HStack(spacing: 6) {
+            TextField("点击输入备注…", text: $note)
+                .textFieldStyle(.plain)
+                .font(.system(size: 13))
+                .focused($noteFocused)
+                .submitLabel(.done)
+                .onSubmit { noteFocused = false }
+                .frame(minWidth: 72)
+                .layoutPriority(1)
+                .accessibilityIdentifier("editor.note")
+            #if os(macOS)
+            TextField("0.00", text: $amountText)
+                .textFieldStyle(.plain)
+                .multilineTextAlignment(.trailing)
+                .font(.system(size: 25, design: .rounded))
+                .frame(maxWidth: 210)
+                .accessibilityLabel("金额")
+                .accessibilityIdentifier("editor.amount")
+            #else
+            Text("¥\(amountText.isEmpty ? "0.00" : amountText)")
+                .font(.system(size: 32, weight: .regular, design: .rounded))
+                .lineLimit(1)
+                .minimumScaleFactor(0.4)
+                .frame(minWidth: 90, maxWidth: 165, alignment: .trailing)
+                .accessibilityIdentifier("editor.amount")
+                .accessibilityLabel("金额 \(amountText.isEmpty ? "0.00" : amountText)")
+            #endif
+        }
+        .padding(.horizontal, 11)
+        .padding(.vertical, 13)
+        .paperCard()
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("editor.input-card")
     }
 
     private var recentNotes: [String] {
