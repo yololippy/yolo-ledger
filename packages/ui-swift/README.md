@@ -20,6 +20,7 @@ Swift module / library：`YoloLedgerUI`，仅依赖本地 `YoloLedgerCore`。
 - 支出分类按用户实机截图排列：餐饮、交通、购物、宠物、住房、零食、旅行、通讯、医疗、Pos、其它、礼金、运动，并在末尾保留原有日用；收入为工资、奖金、其他收入。分类网格可滚动，猫咪、住房、蛋糕、飞机、电话、医疗箱、票券、省略号、礼金袋和运动鞋使用代码绘制的插画。
 - 分类圆形按钮最大为 70 点，窄列随实际可用宽度等比缩小，维持四列，避免固定宽度挤出网格；切换收支类型时滚动位置回到顶部。
 - 数字键盘支持加减表达式，保存调用 Core 的 `LedgerAmountExpression.evaluate`；例如 `12.34+7.66-5` 保存为 `15.00`，非法表达式保留输入。
+- 记账成功后，输入过的非空备注会按分类从账目中去重提取；记账页只展示当前选中分类的备注，按 FIFO 顺序横向排列最多 20 条，点击即可填入并继续使用数字键盘，超出上限时淘汰最早的备注。该记录沿用账目本身的本地持久化和 iCloud 同步，不另建备注数据库。
 - 账单按所选月份显示真实收支、结余、黄色支出／粉色收入条及日分组记录。
 - 明细提供真实月日历、前后月切换、每日结余、日期选择、当日收支及列表筛选；选中某一天后点击中央加号，新账目默认使用该日期；再次点击同一天或“查看整月”取消日期筛选。
 - 账单与明细共用自研年月选择器：点击年月标题后，iPhone 显示紧凑 Sheet，Mac 显示标题锚定 Popover；月份使用 3 × 4 网格，点击年份可进入每页 12 年的快速选择。左右按钮或横向滑动切换年份；月份高亮同时匹配选中年份，切到其他年份不会保留旧月份高亮；“回到本月”只导航并保持面板打开。iPhone 禁用系统拖拽关闭以免横滑误关，使用右上角关闭按钮主动退出。未引入第三方日历代码。
@@ -52,7 +53,7 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test --package-pa
 ## 辅助功能标识
 
 - 导航：`navigation.details`、`navigation.bills`、`navigation.books`、`navigation.settings`、`entry.add`。
-- 编辑：`editor.title`、`editor.screenshot-confirmation`、`editor.kind.expense`／`income`、`editor.amount`、`editor.categories`（分类滚动区）、`editor.category.<UUID>`、`editor.book`、`editor.date`、`editor.note`、`editor.keypad-return`、`editor.save`、`editor.cancel`、`editor.error`。
+- 编辑：`editor.title`、`editor.screenshot-confirmation`、`editor.kind.expense`／`income`、`editor.amount`、`editor.categories`（分类滚动区）、`editor.category.<UUID>`、`editor.book`、`editor.date`、`editor.note`、`editor.note-suggestions`、`editor.note-suggestion.<index>`、`editor.keypad-return`、`editor.save`、`editor.cancel`、`editor.error`。
 - 数字键盘：`keypad.0` 至 `keypad.9`、`keypad..`、`keypad.+`、`keypad.-`、`keypad.delete`、`keypad.date`。
 - 日历：`month.previous`、`month.next`、`month.title`、`month-picker.year-toggle`、`month-picker.year.previous`、`month-picker.year.next`、`month-picker.range.previous`、`month-picker.range.next`、`month-picker.month.<1...12>`、`month-picker.year.<year>`、`month-picker.current`、`month-picker.back-to-months`、`month-picker.close`、`calendar.day.<day>`、`calendar.clear-selection`。
 - 详情：`entry.row.<UUID>`、`detail.amount`、`detail.note`、`entry.edit`、`entry.delete`、`entry.delete.confirm`、`detail.close`。票据按 `updatedAt` 重建，保持编辑后的辅助功能内容同步。

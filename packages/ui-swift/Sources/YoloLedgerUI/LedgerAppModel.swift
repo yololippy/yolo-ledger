@@ -29,6 +29,30 @@ final class LedgerAppModel {
 
     var selectedBook: LedgerBook? { books.first { $0.id == selectedBookID } }
     var selectedEntries: [LedgerEntry] { entries.filter { $0.bookID == selectedBookID } }
+    func recentNotes(categoryID: UUID, limit: Int = 20) -> [String] {
+        guard limit > 0 else { return [] }
+        var seen = Set<String>()
+        let sortedEntries = entries.filter { $0.categoryID == categoryID }.sorted { left, right in
+            if left.updatedAt != right.updatedAt { return left.updatedAt < right.updatedAt }
+            if left.createdAt != right.createdAt { return left.createdAt < right.createdAt }
+            if left.date != right.date { return left.date < right.date }
+            return left.id.uuidString < right.id.uuidString
+        }
+
+        var notes: [String] = []
+        for entry in sortedEntries {
+            let note = entry.note.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !note.isEmpty else { continue }
+            let key = note.folding(
+                options: [.caseInsensitive, .diacriticInsensitive],
+                locale: .current
+            )
+            guard seen.insert(key).inserted else { continue }
+            notes.append(note)
+        }
+        return Array(notes.suffix(limit))
+    }
+
     var monthEntries: [LedgerEntry] {
         guard let range = try? LedgerDateRanges.range(for: .month, containing: displayedMonth) else { return [] }
         return selectedEntries.filter { range.contains($0.date) }

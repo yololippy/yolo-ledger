@@ -133,6 +133,38 @@ struct EntryEditorView: View {
 
     private var inputPanel: some View {
         VStack(spacing: 10) {
+            if !recentNotes.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(Array(recentNotes.enumerated()), id: \.offset) { index, savedNote in
+                            Button {
+                                note = savedNote
+                                noteFocused = false
+                            } label: {
+                                Text(savedNote)
+                                    .font(.system(size: 12, weight: .medium))
+                                    .lineLimit(1)
+                                    .padding(.horizontal, 12)
+                                    .frame(height: 30)
+                                    .background(note == savedNote ? theme.primarySoft : theme.surface)
+                                    .clipShape(Capsule())
+                                    .overlay {
+                                        Capsule().stroke(
+                                            note == savedNote ? theme.primary : theme.ink,
+                                            lineWidth: note == savedNote ? 1.8 : 1
+                                        )
+                                    }
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("editor.note-suggestion.\(index)")
+                            .accessibilityLabel("常用备注 \(savedNote)")
+                            .accessibilityAddTraits(note == savedNote ? .isSelected : [])
+                        }
+                    }
+                    .padding(.horizontal, 1)
+                }
+                .accessibilityIdentifier("editor.note-suggestions")
+            }
             HStack(spacing: 9) {
                 Image(systemName: "pencil.line").font(.system(size: 19)).frame(width: 30)
                 HStack(spacing: 6) {
@@ -158,6 +190,11 @@ struct EntryEditorView: View {
         }.padding(.horizontal,14).padding(.top,13).padding(.bottom,10)
             .background(keypadBackground.ignoresSafeArea(edges: .bottom))
             .overlay(alignment: .top) { Rectangle().fill(theme.ink).frame(height: 1.4) }
+    }
+
+    private var recentNotes: [String] {
+        guard let categoryID else { return [] }
+        return model.recentNotes(categoryID: categoryID)
     }
 
     private var hidesKeypad: Bool {

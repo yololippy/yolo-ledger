@@ -21,19 +21,13 @@ struct ScreenshotLedgerIntent: AppIntent {
         Summary("从 \(\.$screenshot) 识别并确认记账")
     }
 
-    func perform() async throws -> some IntentResult & ProvidesDialog {
+    func perform() async throws -> some IntentResult {
         guard screenshot.data.count <= 40 * 1_024 * 1_024 else {
             throw ScreenshotLedgerIntentError.imageTooLarge
         }
         let proposal = try await ScreenshotTextRecognizer.recognize(imageData: screenshot.data)
         try ScreenshotImportStore.save(proposal)
-        if proposal.amountMinorUnits == 0 {
-            return .result(dialog: "已识别实付款为 ¥0.00，本次没有实际支出，请在有落中核对。")
-        }
-        if let amount = proposal.amount {
-            return .result(dialog: "已识别 ¥\(amount.decimalString)，请在有落中核对后保存。")
-        }
-        return .result(dialog: "没有识别到明确金额，请在有落中补充并确认。")
+        return .result()
     }
 }
 

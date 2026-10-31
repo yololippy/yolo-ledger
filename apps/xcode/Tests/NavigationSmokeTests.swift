@@ -180,6 +180,34 @@ final class NavigationSmokeTests: XCTestCase {
         XCTAssertTrue(entryButton(app, note: "选中日期新增验证").waitForExistence(timeout: 10))
     }
 
+    func testSavedNoteCanBeReusedFromRecentSuggestions() throws {
+        let app = makeApplication()
+        app.launch()
+
+        XCTAssertTrue(app.buttons["entry.add"].waitForExistence(timeout: 15))
+        app.buttons["entry.add"].tap()
+        XCTAssertTrue(app.buttons["keypad.1"].waitForExistence(timeout: 10))
+        typeAmount(app, expression: "28.00")
+        app.textFields["editor.note"].tap()
+        app.textFields["editor.note"].typeText("午饭")
+        app.buttons["editor.keypad-return"].tap()
+        app.buttons["editor.save"].tap()
+        XCTAssertTrue(entryButton(app, note: "午饭").waitForExistence(timeout: 10))
+
+        app.buttons["entry.add"].tap()
+        let suggestion = app.buttons["editor.note-suggestion.0"]
+        XCTAssertTrue(suggestion.waitForExistence(timeout: 10))
+        XCTAssertTrue(suggestion.label.contains("午饭"))
+        suggestion.tap()
+        XCTAssertEqual(app.textFields["editor.note"].value as? String, "午饭")
+        XCTAssertTrue(app.buttons["keypad.1"].exists)
+
+        app.buttons["editor.category.A20E127A-36F6-401A-A6E3-000000000102"].tap()
+        XCTAssertFalse(suggestion.waitForExistence(timeout: 1))
+        app.buttons["editor.category.A20E127A-36F6-401A-A6E3-000000000101"].tap()
+        XCTAssertTrue(app.buttons["editor.note-suggestion.0"].waitForExistence(timeout: 3))
+    }
+
     func testNewCategoriesPersistAcrossRelaunchIncludingLastRow() throws {
         let app = makeApplication()
         app.launch()

@@ -211,6 +211,77 @@ struct LedgerAppModelTests {
     }
 
     @Test
+    func recentNotesUseFIFOOrderAndDiscardTheOldestPastTheLimit() async throws {
+        let repository = TestLedgerRepository()
+        let model = LedgerAppModel(repository: repository)
+        let base = Date(timeIntervalSince1970: 1_700_000_000)
+        let categoryID = LedgerSeedData.categories[0].id
+        let otherCategoryID = LedgerSeedData.categories[1].id
+        let notes = ["午饭", "打车", "   ", "  午饭\n", "买菜"]
+        let entries = try notes.enumerated().map { index, note in
+            let content = LedgerEntryDraft(
+                bookID: LedgerSeedData.defaultBook.id,
+                categoryID: categoryID,
+                kind: .expense,
+                amount: try LedgerAmount(input: "10.00"),
+                date: base,
+                note: note
+            )
+            let timestamp = base.addingTimeInterval(TimeInterval(index))
+            return LedgerEntry(
+                id: UUID(),
+                draft: content,
+                createdAt: timestamp,
+                updatedAt: timestamp
+            )
+        }
+        let otherCategoryEntry = LedgerEntry(
+            id: UUID(),
+            draft: LedgerEntryDraft(
+                bookID: LedgerSeedData.defaultBook.id,
+                categoryID: otherCategoryID,
+                kind: .expense,
+                amount: try LedgerAmount(input: "20.00"),
+                date: base,
+                note: "地铁"
+            ),
+            createdAt: base,
+            updatedAt: base
+        )
+        await repository.replaceEntries(entries + [otherCategoryEntry])
+        await model.refresh()
+
+        #expect(model.recentNotes(categoryID: categoryID) == ["午饭", "打车", "买菜"])
+        #expect(model.recentNotes(categoryID: otherCategoryID) == ["地铁"])
+        #expect(model.recentNotes(categoryID: categoryID, limit: 2) == ["打车", "买菜"])
+        #expect(model.recentNotes(categoryID: categoryID, limit: 0).isEmpty)
+
+        let manyEntries = try (0..<22).map { index in
+            let content = LedgerEntryDraft(
+                bookID: LedgerSeedData.defaultBook.id,
+                categoryID: categoryID,
+                kind: .expense,
+                amount: try LedgerAmount(input: "10.00"),
+                date: base,
+                note: "备注 \(index)"
+            )
+            let timestamp = base.addingTimeInterval(TimeInterval(index))
+            return LedgerEntry(
+                id: UUID(),
+                draft: content,
+                createdAt: timestamp,
+                updatedAt: timestamp
+            )
+        }
+        await repository.replaceEntries(manyEntries)
+        await model.refresh()
+
+        #expect(model.recentNotes(categoryID: categoryID).count == 20)
+        #expect(model.recentNotes(categoryID: categoryID).first == "备注 2")
+        #expect(model.recentNotes(categoryID: categoryID).last == "备注 21")
+    }
+
+    @Test
     func savingFromAnotherMonthOrDayMakesTheSavedRecordVisible() async throws {
         let model = LedgerAppModel(repository: TestLedgerRepository())
         await model.refresh()
@@ -249,6 +320,7 @@ private actor TestLedgerRepository: LedgerRepository {
     func holdNextCreate() { holdsCreate = true }
     func holdNextBookRead() { holdsBookRead = true }
     func replaceBooks(_ value: [LedgerBook]) { books = value }
+    func replaceEntries(_ value: [LedgerEntry]) { entries = value }
     func releaseCreate() { createGate?.resume(); createGate = nil }
     func releaseBookRead() { readGate?.resume(); readGate = nil }
 
