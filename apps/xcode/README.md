@@ -15,11 +15,11 @@
 
 品牌与构建元数据集中在 `Configuration/Brand.xcconfig`：App 显示名、英文名、Bundle ID、后台任务标识和版本号由双端 Target 共用。运行时代码中的中英文名称、同步目录、快捷指令名称和本地数据目录集中在 `YoloLedgerProduct.swift`，界面及存储模块不再重复写死这些字符串。
 
-`Support/LedgerAppBootstrap.swift` 同时编入两个 App，长期持有 `SwiftDataLedgerRepository` 并注入共享 UI。默认位置为各 App 容器的 `Application Support/YoloLedger/ledger.store`。打开失败显示错误和重试，不回退内存、不清库、不调用 fatalError。正常 App 使用纯本地 SwiftData 账库；UI 测试参数使用独立账库，并跳过真实书签恢复和后台调度。
+`Support/LedgerAppBootstrap.swift` 同时编入两个 App，长期持有 `SwiftDataLedgerRepository` 并注入共享 UI。默认位置为各 App 容器的 `Application Support/YoloLedger/ledger.store`。账库在高优先级后台任务中打开，不阻塞主线程；“正在打开本地账库”保留为超过 400 毫秒时的兜底，正常启动不闪提示。打开失败显示错误和重试，不回退内存、不清库、不调用 fatalError。正常 App 使用纯本地 SwiftData 账库；UI 测试参数使用独立账库，并跳过真实书签恢复和后台调度。
 
 App 组装层还把 Storage 的喵喵记账批量导入处理器注入共享 UI。共享 UI 只产生 Core 导入计划；Storage 在写入前创建本地备份并返回导入报告，App 再通知文件夹同步控制器本地数据已变化。DEBUG 参数 `--ui-test-meow-import` 只注入脱敏的内存 CSV 选择动作，真实 App 始终使用 iPhone／Mac 系统文件选择器。
 
-两个 App Target 不再申请 CloudKit、iCloud Documents、推送或远程通知能力。“我的”页面由用户选择 iCloud Drive 或普通可写文件夹，App 保存 security-scoped bookmark 和随机、稳定的安装设备 ID；每次文件读写都在安全访问期间内执行。选定、启动、回到前台和本地写入后会尝试同步；同一时刻只有一个同步任务。iPhone 额外使用 best-effort `BGAppRefreshTask`，系统决定何时执行；Mac 仅在 App 活跃时执行。
+两个 App Target 不再申请 CloudKit、iCloud Documents、推送或远程通知能力。“我的”页面由用户选择 iCloud Drive 或普通可写文件夹，App 保存 security-scoped bookmark 和随机、稳定的安装设备 ID；每次文件读写都在安全访问期间内执行。启动时的自动同步延后 750 毫秒，让本地首屏查询优先完成；选定、回到前台和本地写入后仍会尝试同步，同一时刻只有一个同步任务。iPhone 额外使用 best-effort `BGAppRefreshTask`，系统决定何时执行；Mac 仅在 App 活跃时执行。
 
 `Resources/Assets.xcassets` 同时编入 iPhone 与 Mac Target，`AppIcon` 使用已选定的有落记账亮系统蓝图标；iOS 使用 1024 × 1024 master，macOS 使用同一源图生成的标准多尺寸资源。
 

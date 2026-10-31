@@ -197,6 +197,55 @@ struct SwiftDataLedgerRepositoryTests {
         #expect(try await reopened.fetchEntries(bookID: second.id) == [secondEntry])
     }
 
+    @Test func boundedReadsExcludeHistoryAndRecentNotesStayCategoryScoped() async throws {
+        let directory = TestDirectory()
+        defer { directory.remove() }
+        let repository = try SwiftDataLedgerRepository(storeURL: directory.storeURL)
+        let bookID = LedgerSeedData.defaultBook.id
+        let categoryID = LedgerSeedData.categories.first { $0.kind == .expense }!.id
+        let otherCategoryID = LedgerSeedData.categories.dropFirst().first { $0.kind == .expense }!.id
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        let end = start.addingTimeInterval(300)
+        let before = try await repository.createEntry(makeDraft(
+            categoryID: categoryID,
+            amount: 100,
+            date: start.addingTimeInterval(-1),
+            note: "范围外"
+        ))
+        let first = try await repository.createEntry(makeDraft(
+            categoryID: categoryID,
+            amount: 200,
+            date: start.addingTimeInterval(10),
+            note: "午饭"
+        ))
+        let second = try await repository.createEntry(makeDraft(
+            categoryID: categoryID,
+            amount: 300,
+            date: start.addingTimeInterval(20),
+            note: "打车"
+        ))
+        let otherCategory = try await repository.createEntry(makeDraft(
+            categoryID: otherCategoryID,
+            amount: 400,
+            date: start.addingTimeInterval(30),
+            note: "其它分类"
+        ))
+        let after = try await repository.createEntry(makeDraft(
+            categoryID: categoryID,
+            amount: 500,
+            date: end,
+            note: "范围外二"
+        ))
+
+        let range = try LedgerDateRange(start: start, end: end)
+        let boundedEntries = try await repository.fetchEntries(bookID: bookID, dateRange: range)
+        let recentNotes = try await repository.fetchRecentNotes(categoryID: categoryID, limit: 2)
+        #expect(boundedEntries == [otherCategory, second, first])
+        #expect(recentNotes == ["打车", "范围外二"])
+        #expect(try await repository.fetchEntries().contains(before))
+        #expect(try await repository.fetchEntries().contains(after))
+    }
+
     @Test func invalidReferencesKindsAndDatesDoNotPolluteStoredData() async throws {
         let directory = TestDirectory()
         defer { directory.remove() }

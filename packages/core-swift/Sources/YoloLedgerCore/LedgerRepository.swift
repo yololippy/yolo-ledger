@@ -15,6 +15,11 @@ public protocol LedgerRepository: LedgerBookRepository {
     /// Returns the selected book's entries, or all entries when bookID is nil.
     /// Results are ordered by date descending, then createdAt descending, then UUID string ascending.
     func fetchEntries(bookID: UUID?) async throws -> [LedgerEntry]
+    /// Returns one book's entries inside a half-open local-calendar interval.
+    /// Concrete stores should push this filter into the database instead of loading every entry.
+    func fetchEntries(bookID: UUID, dateRange: LedgerDateRange) async throws -> [LedgerEntry]
+    /// Returns up to `limit` distinct non-empty notes for one category in FIFO display order.
+    func fetchRecentNotes(categoryID: UUID, limit: Int) async throws -> [String]
 
     /// The caller can retain id across retries; an existing id throws duplicateIdentifier.
     func createEntry(_ draft: LedgerEntryDraft, id: UUID) async throws -> LedgerEntry
@@ -35,6 +40,35 @@ public protocol LedgerRepository: LedgerBookRepository {
 public extension LedgerRepository {
     func fetchEntries() async throws -> [LedgerEntry] {
         try await fetchEntries(bookID: nil)
+    }
+
+    func fetchEntries(bookID: UUID, dateRange: LedgerDateRange) async throws -> [LedgerEntry] {
+        try await fetchEntries(bookID: bookID).filter { dateRange.contains($0.date) }
+    }
+
+    func fetchRecentNotes(categoryID: UUID, limit: Int) async throws -> [String] {
+        guard limit > 0 else { return [] }
+        let candidates = try await fetchEntries(bookID: nil)
+            .filter { $0.categoryID == categoryID }
+            .sorted { left, right in
+                if left.updatedAt != right.updatedAt { return left.updatedAt < right.updatedAt }
+                if left.createdAt != right.createdAt { return left.createdAt < right.createdAt }
+                if left.date != right.date { return left.date < right.date }
+                return left.id.uuidString < right.id.uuidString
+            }
+        var seen = Set<String>()
+        var notes: [String] = []
+        for entry in candidates {
+            let note = entry.note.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !note.isEmpty else { continue }
+            let key = note.folding(
+                options: [.caseInsensitive, .diacriticInsensitive],
+                locale: .current
+            )
+            guard seen.insert(key).inserted else { continue }
+            notes.append(note)
+        }
+        return Array(notes.suffix(limit))
     }
 
     func createEntry(_ draft: LedgerEntryDraft) async throws -> LedgerEntry {

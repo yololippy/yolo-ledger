@@ -40,6 +40,14 @@ public struct SwiftDataLedgerRepository: LedgerRepository, LedgerFolderSyncing {
         try await store.fetchEntries(bookID: bookID)
     }
 
+    public func fetchEntries(bookID: UUID, dateRange: LedgerDateRange) async throws -> [LedgerEntry] {
+        try await store.fetchEntries(bookID: bookID, dateRange: dateRange)
+    }
+
+    public func fetchRecentNotes(categoryID: UUID, limit: Int) async throws -> [String] {
+        try await store.fetchRecentNotes(categoryID: categoryID, limit: limit)
+    }
+
     public func createEntry(_ draft: LedgerEntryDraft, id: UUID) async throws -> LedgerEntry {
         try await store.createEntry(draft, id: id)
     }
@@ -115,16 +123,14 @@ private actor LedgerStoreActor: ModelActor {
         let container = try LocalLedgerStore.makeContainer(at: storeURL, syncMode: syncMode)
         let context = ModelContext(container)
         context.autosaveEnabled = false
-        try Self.reconcileDuplicates(in: context)
+        try Self.reconcileBootstrapRecords(in: context)
         try LedgerSeedBootstrap.initialize(in: context)
-        try Self.reconcileDuplicates(in: context)
         self.storeURL = storeURL
         self.modelContainer = container
         self.modelExecutor = DefaultSerialModelExecutor(modelContext: context)
     }
 
     func fetchBooks() throws -> [LedgerBook] {
-        try reconcileDuplicates()
         return try activeBooks()
     }
 
@@ -141,7 +147,6 @@ private actor LedgerStoreActor: ModelActor {
     }
 
     func fetchCategories() throws -> [LedgerCategory] {
-        try reconcileDuplicates()
         return try activeCategories()
     }
 
@@ -163,6 +168,8 @@ private actor LedgerStoreActor: ModelActor {
     }
 
     func fetchEntries(bookID: UUID?) throws -> [LedgerEntry] {
+        // Keep the legacy unbounded API self-healing for sync/import maintenance callers.
+        // Launch uses the bounded overload below and never pays for this full-table pass.
         try reconcileDuplicates()
         let books = try activeBooks()
         let categories = try activeCategories()
@@ -188,8 +195,65 @@ private actor LedgerStoreActor: ModelActor {
             }
     }
 
+    func fetchEntries(bookID: UUID, dateRange: LedgerDateRange) throws -> [LedgerEntry] {
+        let books = try activeBooks()
+        guard books.contains(where: { $0.id == bookID }) else {
+            throw LedgerError.bookNotFound(bookID)
+        }
+        let categories = try activeCategories()
+        let rangeStart = dateRange.start
+        let rangeEnd = dateRange.end
+        let descriptor = FetchDescriptor<LedgerSchemaV2.EntryRecord>(
+            predicate: #Predicate {
+                $0.bookID == bookID
+                    && $0.occurredAt >= rangeStart
+                    && $0.occurredAt < rangeEnd
+                    && $0.deletedAt == nil
+            },
+            sortBy: [
+                SortDescriptor(\.occurredAt, order: .reverse),
+                SortDescriptor(\.createdAt, order: .reverse),
+            ]
+        )
+        return try modelContext.fetch(descriptor)
+            .map { record in
+                let entry = try Self.entry(from: record)
+                try LedgerValidation.validate(entry.draft, books: books, categories: categories)
+                return entry
+            }
+            .sorted { left, right in
+                if left.date != right.date { return left.date > right.date }
+                if left.createdAt != right.createdAt { return left.createdAt > right.createdAt }
+                return left.id.uuidString < right.id.uuidString
+            }
+    }
+
+    func fetchRecentNotes(categoryID: UUID, limit: Int) throws -> [String] {
+        guard limit > 0 else { return [] }
+        let descriptor = FetchDescriptor<LedgerSchemaV2.EntryRecord>(
+            predicate: #Predicate { $0.categoryID == categoryID && $0.deletedAt == nil },
+            sortBy: [
+                SortDescriptor(\.updatedAt),
+                SortDescriptor(\.createdAt),
+                SortDescriptor(\.occurredAt),
+            ]
+        )
+        var seen = Set<String>()
+        var notes: [String] = []
+        for record in try modelContext.fetch(descriptor) {
+            let note = record.note.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !note.isEmpty else { continue }
+            let key = note.folding(
+                options: [.caseInsensitive, .diacriticInsensitive],
+                locale: .current
+            )
+            guard seen.insert(key).inserted else { continue }
+            notes.append(note)
+        }
+        return Array(notes.suffix(limit))
+    }
+
     func createEntry(_ draft: LedgerEntryDraft, id: UUID) throws -> LedgerEntry {
-        try reconcileDuplicates()
         guard try findEntry(id: id, includesDeleted: true) == nil else {
             throw LedgerError.duplicateIdentifier(id)
         }
@@ -225,7 +289,6 @@ private actor LedgerStoreActor: ModelActor {
     }
 
     func updateEntry(id: UUID, draft: LedgerEntryDraft) throws -> LedgerEntry {
-        try reconcileDuplicates()
         guard let record = try findEntry(id: id) else { throw LedgerError.entryNotFound(id) }
         try validate(draft)
         return try save {
@@ -241,7 +304,6 @@ private actor LedgerStoreActor: ModelActor {
     }
 
     func deleteEntry(id: UUID) throws {
-        try reconcileDuplicates()
         guard let record = try findEntry(id: id) else { throw LedgerError.entryNotFound(id) }
         try save {
             let now = Date()
@@ -251,7 +313,6 @@ private actor LedgerStoreActor: ModelActor {
     }
 
     func createBook(name: String, id: UUID) throws -> LedgerBook {
-        try reconcileDuplicates()
         let normalizedName = try LedgerValidation.normalizedName(name)
         guard try findBook(id: id, includesDeleted: true) == nil else {
             throw LedgerError.duplicateIdentifier(id)
@@ -271,7 +332,6 @@ private actor LedgerStoreActor: ModelActor {
     }
 
     func renameBook(id: UUID, name: String) throws -> LedgerBook {
-        try reconcileDuplicates()
         let normalizedName = try LedgerValidation.normalizedName(name)
         guard let record = try findBook(id: id) else { throw LedgerError.bookNotFound(id) }
         return try save {
@@ -753,10 +813,6 @@ private actor LedgerStoreActor: ModelActor {
         return try modelContext.fetch(descriptor).first
     }
 
-    private func reconcileDuplicates() throws {
-        try Self.reconcileDuplicates(in: modelContext)
-    }
-
     private static func reconcileDuplicates(in context: ModelContext) throws {
         let books = try context.fetch(FetchDescriptor<LedgerSchemaV2.BookRecord>())
         for duplicates in Dictionary(grouping: books, by: \.id).values where duplicates.count > 1 {
@@ -784,6 +840,33 @@ private actor LedgerStoreActor: ModelActor {
             for record in ordered.dropFirst() { context.delete(record) }
         }
 
+        if context.hasChanges { try context.save() }
+    }
+
+    private func reconcileDuplicates() throws {
+        try Self.reconcileDuplicates(in: modelContext)
+    }
+
+    /// Seed upgrades only require unique books, categories and metadata. Entries are omitted
+    /// here so opening a large current store does not perform a full history scan.
+    private static func reconcileBootstrapRecords(in context: ModelContext) throws {
+        let books = try context.fetch(FetchDescriptor<LedgerSchemaV2.BookRecord>())
+        for duplicates in Dictionary(grouping: books, by: \.id).values where duplicates.count > 1 {
+            let ordered = duplicates.sorted(by: preferredBook)
+            for record in ordered.dropFirst() { context.delete(record) }
+        }
+        let categories = try context.fetch(FetchDescriptor<LedgerSchemaV2.CategoryRecord>())
+        for duplicates in Dictionary(grouping: categories, by: \.id).values where duplicates.count > 1 {
+            let ordered = duplicates.sorted(by: preferredCategory)
+            for record in ordered.dropFirst() { context.delete(record) }
+        }
+        let metadata = try context.fetch(FetchDescriptor<LedgerSchemaV2.StoreMetadata>())
+        for duplicates in Dictionary(grouping: metadata, by: \.key).values where duplicates.count > 1 {
+            let ordered = duplicates.sorted {
+                String(describing: $0.persistentModelID) < String(describing: $1.persistentModelID)
+            }
+            for record in ordered.dropFirst() { context.delete(record) }
+        }
         if context.hasChanges { try context.save() }
     }
 

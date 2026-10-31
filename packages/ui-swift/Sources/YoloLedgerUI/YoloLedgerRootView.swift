@@ -24,6 +24,7 @@ public struct YoloLedgerRootView: View {
     @State private var newEntryDate = Date()
     @State private var selectedEntry: LedgerEntry?
     @State private var screenshotProposalToConfirm: LedgerScreenshotProposal?
+    @State private var showsInitialLoadingMessage = false
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.ledgerTheme) private var theme
 
@@ -67,7 +68,9 @@ public struct YoloLedgerRootView: View {
                     Button("重试") { Task { await model.refresh() } }.buttonStyle(PaperButtonStyle(fill: theme.primarySoft))
                         .accessibilityIdentifier("ledger.reload")
                 }.padding(30).frame(maxWidth: 460)
-            } else { ProgressView("正在读取本地账目") }
+            } else if showsInitialLoadingMessage {
+                ProgressView("正在读取本地账目")
+            }
         }
         .foregroundStyle(theme.ink)
         .font(.system(.body, design: .rounded))
@@ -75,6 +78,15 @@ public struct YoloLedgerRootView: View {
         .task {
             await model.refresh()
             await model.observeRepositoryUpdates()
+        }
+        .task(id: model.hasLoaded) {
+            guard !model.hasLoaded else {
+                showsInitialLoadingMessage = false
+                return
+            }
+            try? await Task.sleep(for: .milliseconds(400))
+            guard !Task.isCancelled, !model.hasLoaded, model.loadError == nil else { return }
+            showsInitialLoadingMessage = true
         }
         .onChange(of: scenePhase) { _, value in
             if value == .active { Task { await model.refresh() } }
@@ -273,7 +285,7 @@ private struct LedgerEntriesView: View {
         VStack(spacing: 0) {
             HStack {
                 Menu {
-                    ForEach(model.books) { book in Button(book.name) { model.selectBook(book.id) } }
+                    ForEach(model.books) { book in Button(book.name) { Task { await model.selectBook(book.id) } } }
                 } label: {
                     HStack(spacing: 7) {
                         Text(model.selectedBook?.name ?? "选择账本").font(.system(size: 20, weight: .bold))
@@ -321,11 +333,11 @@ private struct LedgerEntriesView: View {
 
     private var monthHeading: some View {
         HStack {
-            Button { model.moveMonth(by: -1) } label: { Image(systemName: "chevron.left").frame(width: 32,height: 32) }.accessibilityIdentifier("month.previous")
+            Button { Task { await model.moveMonth(by: -1) } } label: { Image(systemName: "chevron.left").frame(width: 32,height: 32) }.accessibilityIdentifier("month.previous")
             Spacer()
-            MonthPickerButton(displayedMonth: model.displayedMonth) { model.selectMonth($0) }
+            MonthPickerButton(displayedMonth: model.displayedMonth) { month in Task { await model.selectMonth(month) } }
             Spacer()
-            Button { model.moveMonth(by: 1) } label: { Image(systemName: "chevron.right").frame(width: 32,height: 32) }.accessibilityIdentifier("month.next")
+            Button { Task { await model.moveMonth(by: 1) } } label: { Image(systemName: "chevron.right").frame(width: 32,height: 32) }.accessibilityIdentifier("month.next")
         }.buttonStyle(.plain)
     }
 
@@ -394,7 +406,7 @@ private struct LedgerCalendarView: View {
             page: model.displayedMonth,
             previousPage: { calendar.date(byAdding: .month, value: -1, to: $0) ?? $0 },
             nextPage: { calendar.date(byAdding: .month, value: 1, to: $0) ?? $0 },
-            selectPage: { model.selectMonth($0) },
+            selectPage: { month in Task { await model.selectMonth(month) } },
             debugIdentifier: "calendar.pager"
         ) { month, paging in
             calendarPage(month: month, paging: paging)
@@ -422,7 +434,7 @@ private struct LedgerCalendarView: View {
                 }
                 .pagingAccessibilityIdentifier("month.previous")
                 Spacer()
-                MonthPickerButton(displayedMonth: month) { model.selectMonth($0) }
+                MonthPickerButton(displayedMonth: month) { selectedMonth in Task { await model.selectMonth(selectedMonth) } }
                 Spacer()
                 Button(action: paging.moveToNext) {
                     Image(systemName: "chevron.right").frame(width: 30,height: 30)
@@ -483,7 +495,7 @@ private struct LedgerBooksView: View {
                 HStack { Text("我的账本").font(.system(size: 23,weight: .bold)); Spacer(); Text("\(model.books.count) 本").font(.caption).foregroundStyle(theme.muted) }
                 ForEach(model.books) { book in
                     HStack(spacing: 12) {
-                        Button { model.selectBook(book.id) } label: {
+                        Button { Task { await model.selectBook(book.id) } } label: {
                             HStack(spacing: 14) {
                                 Image(systemName: "book.closed").font(.system(size: 27,weight: .light)).frame(width: 53,height: 62).paperCard(fill: theme.primarySoft,radius: 5)
                                 VStack(alignment: .leading,spacing: 8) {

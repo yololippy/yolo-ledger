@@ -61,6 +61,8 @@ struct LedgerAppModelTests {
         #expect(model.loadError == nil)
         #expect(model.selectedBookID == LedgerSeedData.defaultBook.id)
         #expect(model.categories == LedgerSeedData.categories)
+        #expect(await repository.boundedEntryReadCount == 1)
+        #expect(await repository.unboundedEntryReadCount == 0)
     }
 
     @Test
@@ -179,7 +181,7 @@ struct LedgerAppModelTests {
         #expect(model.selectedBook?.name == "旅行新名")
         #expect(model.books.count == 2)
 
-        model.selectBook(original)
+        await model.selectBook(original)
         #expect(model.selectedEntries.count == 1)
         #expect(try model.monthSummary().expenseMinorUnits == 1000)
         #expect(await model.saveBook(name: "旅行再命名", editingID: newBook, creationID: UUID()))
@@ -242,13 +244,13 @@ struct LedgerAppModelTests {
         #expect(try model.daySummary(firstDay).expenseMinorUnits == 300)
         model.selectDay(secondDay)
         #expect(model.calendarEntries.first?.amount.minorUnits == 700)
-        model.moveMonth(by: -1)
+        await model.moveMonth(by: -1)
         let previous = model.displayedMonth
         #expect(model.selectedDay == nil)
         #expect(model.monthEntries.isEmpty)
         await model.refresh()
         #expect(model.displayedMonth == previous)
-        model.moveMonth(by: 1)
+        await model.moveMonth(by: 1)
         #expect(try model.monthSummary().expenseMinorUnits == 1000)
         model.selectDay(firstDay)
         model.selectDay(firstDay)
@@ -256,12 +258,12 @@ struct LedgerAppModelTests {
     }
 
     @Test
-    func selectingMonthNormalizesToMonthStartAndClearsDayFilter() throws {
+    func selectingMonthNormalizesToMonthStartAndClearsDayFilter() async throws {
         let model = LedgerAppModel(repository: TestLedgerRepository())
         let calendar = Calendar.current
         let target = calendar.date(from: DateComponents(year: 2024, month: 2, day: 20, hour: 18))!
         model.selectDay(Date())
-        model.selectMonth(target)
+        await model.selectMonth(target)
 
         let expected = try LedgerDateRanges.range(for: .month, containing: target).start
         #expect(model.displayedMonth == expected)
@@ -308,6 +310,8 @@ struct LedgerAppModelTests {
         )
         await repository.replaceEntries(entries + [otherCategoryEntry])
         await model.refresh()
+        await model.loadRecentNotes(categoryID: categoryID)
+        await model.loadRecentNotes(categoryID: otherCategoryID)
 
         #expect(model.recentNotes(categoryID: categoryID) == ["午饭", "打车", "买菜"])
         #expect(model.recentNotes(categoryID: otherCategoryID) == ["地铁"])
@@ -333,6 +337,7 @@ struct LedgerAppModelTests {
         }
         await repository.replaceEntries(manyEntries)
         await model.refresh()
+        await model.loadRecentNotes(categoryID: categoryID)
 
         #expect(model.recentNotes(categoryID: categoryID).count == 20)
         #expect(model.recentNotes(categoryID: categoryID).first == "备注 2")
@@ -343,7 +348,7 @@ struct LedgerAppModelTests {
     func savingFromAnotherMonthOrDayMakesTheSavedRecordVisible() async throws {
         let model = LedgerAppModel(repository: TestLedgerRepository())
         await model.refresh()
-        model.moveMonth(by: -2)
+        await model.moveMonth(by: -2)
         model.selectDay(model.displayedMonth)
         let id = UUID()
         #expect(await model.saveEntry(try draft("15.00"), editingID: nil, creationID: id))
@@ -376,6 +381,8 @@ private actor TestLedgerRepository: LedgerRepository {
     private var createGate: CheckedContinuation<Void, Never>?
     private var readGate: CheckedContinuation<Void, Never>?
     private(set) var createCount = 0
+    private(set) var boundedEntryReadCount = 0
+    private(set) var unboundedEntryReadCount = 0
 
     func setReadFailure(_ value: Bool) { readFailure = value }
     func setWriteFailure(_ value: Bool) { writeFailure = value }
@@ -416,7 +423,34 @@ private actor TestLedgerRepository: LedgerRepository {
 
     func fetchEntries(bookID: UUID?) async throws -> [LedgerEntry] {
         if readFailure { throw TestRepositoryError.readFailed }
+        unboundedEntryReadCount += 1
         return entries.filter { bookID == nil || $0.bookID == bookID }
+    }
+
+    func fetchEntries(bookID: UUID, dateRange: LedgerDateRange) async throws -> [LedgerEntry] {
+        if readFailure { throw TestRepositoryError.readFailed }
+        boundedEntryReadCount += 1
+        return entries.filter { $0.bookID == bookID && dateRange.contains($0.date) }
+    }
+
+    func fetchRecentNotes(categoryID: UUID, limit: Int) async throws -> [String] {
+        if readFailure { throw TestRepositoryError.readFailed }
+        guard limit > 0 else { return [] }
+        var seen = Set<String>()
+        var notes: [String] = []
+        for entry in entries.filter({ $0.categoryID == categoryID }).sorted(by: {
+            if $0.updatedAt != $1.updatedAt { return $0.updatedAt < $1.updatedAt }
+            if $0.createdAt != $1.createdAt { return $0.createdAt < $1.createdAt }
+            if $0.date != $1.date { return $0.date < $1.date }
+            return $0.id.uuidString < $1.id.uuidString
+        }) {
+            let note = entry.note.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !note.isEmpty else { continue }
+            let key = note.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
+            guard seen.insert(key).inserted else { continue }
+            notes.append(note)
+        }
+        return Array(notes.suffix(limit))
     }
 
     func createEntry(_ draft: LedgerEntryDraft, id: UUID) async throws -> LedgerEntry {

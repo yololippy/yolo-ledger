@@ -64,9 +64,12 @@ func createBook(name: String, id: UUID) async throws -> LedgerBook
 func renameBook(id: UUID, name: String) async throws -> LedgerBook
 func updates() -> AsyncStream<Void>
 func currentSyncState() -> LedgerSyncState
+func fetchEntries(bookID: UUID, dateRange: LedgerDateRange) async throws -> [LedgerEntry]
+func fetchRecentNotes(categoryID: UUID, limit: Int) async throws -> [String]
 ```
 
 - `fetchEntries(bookID: nil)` 读取全部记录，传入账本 ID 则只读取该账本；无参 `fetchEntries()` 是读取全部记录的便捷重载。结果按记账日期降序、创建时间降序、UUID 字符串升序排列。
+- 首屏和月份浏览使用带 `LedgerDateRange` 的有界读取，具体存储应把账本与半开日期范围下推到数据库；默认协议实现保留内存过滤兼容性。分类备注通过独立的 `fetchRecentNotes` 按需读取，不要求启动时载入全部历史。
 - `createEntry(_:)`、`createBook(name:)` 便捷重载会生成 UUID。需要重试时可由调用方预先生成并保留 ID，调用带 `id:` 的方法；重复创建相同实体 ID 应抛出 `duplicateIdentifier`，不悄然覆盖。
 - Storage 实现新增／修改前调用 `LedgerValidation.validate(_:books:categories:)`，验证账本存在、分类存在、分类收支方向一致及日期有效。金额的正数和精度约束已经由 `LedgerAmount` 构造器保证。
 - 新建／重命名账本先调用 `LedgerValidation.normalizedName(_:)`，去除首尾空白并拒绝空名称。`LedgerBook` 的原有非抛错初始化器保留兼容性，校验发生在写入边界。

@@ -2,7 +2,7 @@
 
 Swift module / library：`YoloLedgerUI`，仅依赖本地 `YoloLedgerCore`。
 
-`YoloLedgerRootView(repository:)` 接受 `any LedgerRepository`，不直接引用 SwiftData。iPhone 还可通过 `YoloLedgerRootView(repository:pendingScreenshotProposal:)` 注入快捷指令识别结果；根页面等待数据加载完成后打开记账确认页。App 长期持有磁盘仓库，根页面的 `LedgerAppModel` 为所有入口提供同一套账本、分类和账目状态。
+`YoloLedgerRootView(repository:)` 接受 `any LedgerRepository`，不直接引用 SwiftData。iPhone 还可通过 `YoloLedgerRootView(repository:pendingScreenshotProposal:)` 注入快捷指令识别结果；根页面等待数据加载完成后打开记账确认页。App 长期持有磁盘仓库，根页面的 `LedgerAppModel` 为所有入口提供同一套账本、分类和当前浏览窗口的账目状态，不在内存中常驻全部历史。
 
 ## 界面与功能
 
@@ -36,6 +36,8 @@ Swift module / library：`YoloLedgerUI`，仅依赖本地 `YoloLedgerCore`。
 ## 状态与数据
 
 - 金额解析、格式化、日期范围和汇总使用 Core；月份、日期均按当前系统本地时区计算，前台恢复会刷新数据并保留浏览月份。
+- 首次读取和切换月份只请求当前账本的前一月、当前月、后一月，既保证横向分页相邻页有数据，又让启动耗时不随历史总量线性增长。切换账本同样只重载该窗口；常用备注进入记账页后按分类异步读取。
+- “正在读取本地账目”作为异常慢读取的兜底保留，但延迟 400 毫秒才显示；正常毫秒级加载直接进入首页，不闪加载提示。
 - 保存成功会切到记录所属月份，并清理不匹配的日期筛选，让新建或改期后的记录可见。
 - 保存中禁止重复提交和继续编辑输入；失败保留输入。新建 UUID 在编辑器生命周期内保持不变。
 - 写入成功但刷新失败仍保留返回记录并提示“已保存，但刷新失败”；重试只读取，不再次写入。
@@ -49,7 +51,7 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift build --package-p
 DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test --package-path packages/ui-swift
 ```
 
-2026-10-31：25 项状态测试通过。在原有读写、失败、账本、日历、并发刷新、文件夹同步和横向分页语义上，新增多文件合并预览、错误阻断与隐私脱敏、重复提交防护、失败保留选择，以及成功报告覆盖。
+2026-10-31：25 项状态测试通过。在原有读写、失败、账本、日历、并发刷新、文件夹同步和横向分页语义上，覆盖多文件导入状态，并确认初次加载只调用有界账目接口、不会退回全量读取；分类备注继续按 FIFO 保持 20 条。
 
 端到端流程、独立测试账库与报告见 [Xcode 工程说明](../../apps/xcode/README.md)。
 

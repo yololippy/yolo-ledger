@@ -21,7 +21,7 @@ final class LedgerAppBootstrap {
     private var failsOnce = ProcessInfo.processInfo.arguments.contains("--ui-test-fail-open-once")
     #endif
 
-    func open(synchronizeAfterOpening: Bool = true) {
+    func open(synchronizeAfterOpening: Bool = true) async {
         guard repository == nil, !isOpening else { return }
         isOpening = true
         failure = nil
@@ -34,7 +34,9 @@ final class LedgerAppBootstrap {
                 throw LaunchError.injectedFailure
             }
             #endif
-            let repository = try SwiftDataLedgerRepository(storeURL: storeURL, syncMode: .local)
+            let repository = try await Task.detached(priority: .userInitiated) {
+                try SwiftDataLedgerRepository(storeURL: storeURL, syncMode: .local)
+            }.value
             self.repository = repository
             let importHandler = repository.makeMeowImportHandler()
             meowImportController.installImportAction { [folderSyncController] plans in
@@ -151,6 +153,7 @@ private enum LaunchError: LocalizedError {
 struct LedgerAppContent: View {
     let bootstrap: LedgerAppBootstrap
     @Binding private var pendingScreenshotProposal: LedgerScreenshotProposal?
+    @State private var showsOpeningMessage = false
 
     init(
         bootstrap: LedgerAppBootstrap,
@@ -175,16 +178,25 @@ struct LedgerAppContent: View {
                 } description: {
                     Text(failure).accessibilityIdentifier("startup.error")
                 } actions: {
-                    Button("重试") { bootstrap.open() }
+                    Button("重试") { Task { await bootstrap.open() } }
                         .accessibilityIdentifier("startup.retry")
                 }
-            } else {
+            } else if showsOpeningMessage {
                 ProgressView("正在打开本地账库")
             }
         }
         .ledgerTheme(.pastel)
         .task {
-            bootstrap.open()
+            await bootstrap.open()
+        }
+        .task(id: bootstrap.isOpening) {
+            guard bootstrap.isOpening else {
+                showsOpeningMessage = false
+                return
+            }
+            try? await Task.sleep(for: .milliseconds(400))
+            guard !Task.isCancelled, bootstrap.isOpening, bootstrap.failure == nil else { return }
+            showsOpeningMessage = true
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
@@ -203,6 +215,7 @@ final class LedgerFolderSyncCoordinator {
     private let deviceID: UUID
     private var syncTask: Task<Bool, Never>?
     private var debounceTask: Task<Void, Never>?
+    private var initialSyncTask: Task<Void, Never>?
     private var needsAnotherSync = false
     private var hasStarted = false
 
@@ -228,12 +241,18 @@ final class LedgerFolderSyncCoordinator {
         hasStarted = true
         restoreConfiguration()
         if synchronizeImmediately, controller.isConfigured {
-            Task { _ = await synchronizeNow() }
+            initialSyncTask = Task { [weak self] in
+                // Prioritize the bounded local query so launch is never queued behind file exchange.
+                try? await Task.sleep(for: .milliseconds(750))
+                guard !Task.isCancelled, let self else { return }
+                self.initialSyncTask = nil
+                _ = await self.synchronizeNow()
+            }
         }
     }
 
     func becameActive() {
-        guard hasStarted, controller.isConfigured else { return }
+        guard hasStarted, controller.isConfigured, initialSyncTask == nil else { return }
         Task { _ = await synchronizeNow() }
     }
 
@@ -303,8 +322,10 @@ final class LedgerFolderSyncCoordinator {
     }
 
     private func stopUsingFolder() {
+        initialSyncTask?.cancel()
         debounceTask?.cancel()
         syncTask?.cancel()
+        initialSyncTask = nil
         debounceTask = nil
         syncTask = nil
         needsAnotherSync = false
@@ -476,7 +497,7 @@ enum FolderSyncBackgroundTasks {
                     refreshTask.setTaskCompleted(success: false)
                     return
                 }
-                currentBootstrap.open(synchronizeAfterOpening: false)
+                await currentBootstrap.open(synchronizeAfterOpening: false)
                 guard let coordinator = currentBootstrap.folderSyncCoordinator else {
                     refreshTask.setTaskCompleted(success: false)
                     return

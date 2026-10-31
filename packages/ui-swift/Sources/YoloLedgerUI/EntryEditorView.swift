@@ -64,6 +64,9 @@ struct EntryEditorView: View {
         .onChange(of: kind) { _, value in
             if !model.categories.contains(where: { $0.id == categoryID && $0.kind == value }) { categoryID = model.categories.first { $0.kind == value }?.id }
         }
+        .task(id: categoryID) {
+            if let categoryID { await model.loadRecentNotes(categoryID: categoryID) }
+        }
         .popover(isPresented: $showsDate) {
             VStack(spacing: 16) {
                 Text("记账日期").font(.headline)
