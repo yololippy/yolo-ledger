@@ -100,6 +100,24 @@ struct LedgerAppModelTests {
     }
 
     @Test
+    func successfulLocalWritesRequestFolderSyncButFailuresDoNot() async throws {
+        let repository = TestLedgerRepository()
+        let recorder = MutationRecorder()
+        let model = LedgerAppModel(repository: repository) { recorder.count += 1 }
+        await model.refresh()
+        let entryID = UUID()
+
+        #expect(await model.saveEntry(try draft("12.34"), editingID: nil, creationID: entryID))
+        #expect(recorder.count == 1)
+        #expect(await model.saveBook(name: "同步测试", editingID: nil, creationID: UUID()))
+        #expect(recorder.count == 2)
+
+        await repository.setWriteFailure(true)
+        #expect(!(await model.deleteEntry(entryID)))
+        #expect(recorder.count == 2)
+    }
+
+    @Test
     func successfulWriteWithFailedRefreshIsStillSuccessfulAndNotReissued() async throws {
         let repository = TestLedgerRepository()
         let model = LedgerAppModel(repository: repository)
@@ -340,6 +358,11 @@ struct LedgerAppModelTests {
         #expect(model.calendarEntries.map(\.id) == [id])
         #expect(try model.monthSummary().expenseMinorUnits == 2500)
     }
+}
+
+@MainActor
+private final class MutationRecorder {
+    var count = 0
 }
 
 private actor TestLedgerRepository: LedgerRepository {

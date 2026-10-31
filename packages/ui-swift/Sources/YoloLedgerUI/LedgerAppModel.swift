@@ -20,10 +20,15 @@ final class LedgerAppModel {
     private(set) var selectedDay: Date?
 
     private let repository: any LedgerRepository
+    private let onLocalMutation: @MainActor @Sendable () -> Void
     private var loadGeneration = 0
 
-    init(repository: any LedgerRepository) {
+    init(
+        repository: any LedgerRepository,
+        onLocalMutation: @escaping @MainActor @Sendable () -> Void = {}
+    ) {
         self.repository = repository
+        self.onLocalMutation = onLocalMutation
         self.syncState = repository.currentSyncState()
     }
 
@@ -160,6 +165,7 @@ final class LedgerAppModel {
             if let selectedDay, !Calendar.current.isDate(selectedDay, inSameDayAs: saved.date) { self.selectedDay = nil }
             await refresh()
             if let message = loadError { loadError = "账目已保存，但刷新失败：\(message)" }
+            onLocalMutation()
             // The write succeeded even if the subsequent read could not refresh.
             return true
         } catch {
@@ -179,6 +185,7 @@ final class LedgerAppModel {
             entries.removeAll { $0.id == id }
             await refresh()
             if let message = loadError { loadError = "账目已删除，但刷新失败：\(message)" }
+            onLocalMutation()
             return true
         } catch {
             operationError = Self.message(for: error)
@@ -208,6 +215,7 @@ final class LedgerAppModel {
             if editingID == nil { selectedBookID = saved.id }
             await refresh()
             if let message = loadError { loadError = "账本已保存，但刷新失败：\(message)" }
+            onLocalMutation()
             return true
         } catch {
             operationError = Self.message(for: error)

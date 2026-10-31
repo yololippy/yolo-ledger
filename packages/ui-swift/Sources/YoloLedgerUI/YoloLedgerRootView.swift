@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 import YoloLedgerCore
 
 private enum LedgerDestination: String, CaseIterable, Identifiable {
@@ -15,6 +16,7 @@ private enum LedgerDestination: String, CaseIterable, Identifiable {
 @MainActor
 public struct YoloLedgerRootView: View {
     @State private var model: LedgerAppModel
+    private let folderSync: LedgerFolderSyncController?
     @Binding private var pendingScreenshotProposal: LedgerScreenshotProposal?
     @State private var selection: LedgerDestination = .details
     @State private var showsNewEntry = false
@@ -24,16 +26,28 @@ public struct YoloLedgerRootView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.ledgerTheme) private var theme
 
-    public init(repository: any LedgerRepository) {
-        _model = State(initialValue: LedgerAppModel(repository: repository))
+    public init(
+        repository: any LedgerRepository,
+        folderSync: LedgerFolderSyncController? = nil
+    ) {
+        self.folderSync = folderSync
+        _model = State(initialValue: LedgerAppModel(
+            repository: repository,
+            onLocalMutation: { folderSync?.localDataDidChange() }
+        ))
         _pendingScreenshotProposal = .constant(nil)
     }
 
     public init(
         repository: any LedgerRepository,
-        pendingScreenshotProposal: Binding<LedgerScreenshotProposal?>
+        pendingScreenshotProposal: Binding<LedgerScreenshotProposal?>,
+        folderSync: LedgerFolderSyncController? = nil
     ) {
-        _model = State(initialValue: LedgerAppModel(repository: repository))
+        self.folderSync = folderSync
+        _model = State(initialValue: LedgerAppModel(
+            repository: repository,
+            onLocalMutation: { folderSync?.localDataDidChange() }
+        ))
         _pendingScreenshotProposal = pendingScreenshotProposal
     }
 
@@ -60,6 +74,9 @@ public struct YoloLedgerRootView: View {
         .onChange(of: scenePhase) { _, value in
             if value == .active { Task { await model.refresh() } }
         }
+        .onChange(of: folderSync?.successfulSyncRevision) { _, _ in
+            Task { await model.refresh() }
+        }
         .onChange(of: model.hasLoaded) { _, _ in presentPendingScreenshotIfReady() }
         .onChange(of: pendingScreenshotProposal?.id) { _, _ in presentPendingScreenshotIfReady() }
         .onChange(of: showsNewEntry) { _, _ in presentPendingScreenshotIfReady() }
@@ -77,6 +94,15 @@ public struct YoloLedgerRootView: View {
         .sheet(isPresented: $showsNewEntry) { EntryEditorView(model: model, initialDate: newEntryDate) }
         #endif
         .sheet(item: $selectedEntry) { EntryDetailView(model: model, entryID: $0.id) }
+        .fileImporter(
+            isPresented: Binding(
+                get: { folderSync?.isFolderImporterPresented == true },
+                set: { if !$0 { folderSync?.dismissFolderImporter() } }
+            ),
+            allowedContentTypes: [.folder]
+        ) { result in
+            Task { await folderSync?.handleFolderSelection(result) }
+        }
     }
 
     private func presentPendingScreenshotIfReady() {
@@ -182,7 +208,7 @@ public struct YoloLedgerRootView: View {
             case .bills, .details:
                 LedgerEntriesView(model: model, isMonthly: selection == .bills) { selectedEntry = $0 }
             case .books: LedgerBooksView(model: model)
-            case .settings: LedgerProfileView(model: model)
+            case .settings: LedgerProfileView(folderSync: folderSync)
             }
         }
     }
@@ -427,7 +453,8 @@ private struct LedgerBooksView: View {
 private struct LedgerProfileView: View {
     @Environment(\.ledgerTheme) private var theme
     @Environment(\.openURL) private var openURL
-    let model: LedgerAppModel
+    let folderSync: LedgerFolderSyncController?
+    @State private var confirmsStop = false
 
     var body: some View {
         ScrollView {
@@ -437,14 +464,7 @@ private struct LedgerProfileView: View {
                     Image(systemName: "book.pages").font(.system(size: 34,weight: .light)).frame(width: 70,height: 70).background(theme.primarySoft,in: Circle()).overlay { Circle().stroke(theme.ink,lineWidth: 1.5) }
                     VStack(alignment: .leading,spacing: 6) { Text("有落").font(.title2.bold()); Text("把生活，一笔笔留下").font(.caption).foregroundStyle(theme.muted) }
                 }.padding(.vertical, 12)
-                VStack(alignment: .leading,spacing: 18) {
-                    Label(syncTitle, systemImage: syncSymbol).font(.headline)
-                    DashedRule()
-                    Text(syncDetail)
-                        .font(.system(size: 14))
-                        .lineSpacing(5)
-                        .accessibilityIdentifier("settings.sync-status")
-                }.padding(21).frame(maxWidth: .infinity,alignment: .leading).paperCard()
+                folderSyncCard
                 #if os(iOS)
                 VStack(alignment: .leading, spacing: 16) {
                     Label("轻点两下，截图记账", systemImage: "hand.tap")
@@ -472,6 +492,83 @@ private struct LedgerProfileView: View {
                 Text("有落 · YoloLedger").font(.caption).foregroundStyle(theme.muted).frame(maxWidth: .infinity).padding(.top, 15)
             }.padding(24).frame(maxWidth: 700).frame(maxWidth: .infinity)
         }
+        .confirmationDialog("停止使用这个同步文件夹？", isPresented: $confirmsStop, titleVisibility: .visible) {
+            Button("停止使用", role: .destructive) {
+                folderSync?.stopUsingFolder()
+            }
+            .accessibilityIdentifier("settings.folder-sync.stop.confirm")
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("本机账目会继续保留；文件夹中的交换文件不会被删除。")
+        }
+    }
+
+    @ViewBuilder
+    private var folderSyncCard: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Label(folderSync?.title ?? "文件夹同步", systemImage: folderSync?.statusSymbol ?? "folder.badge.plus")
+                .font(.headline)
+                .accessibilityIdentifier("settings.folder-sync.title")
+            DashedRule()
+            Text(folderSync?.detail ?? "选择 iCloud Drive 或普通可写文件夹，在设备间交换账目。")
+                .font(.system(size: 14))
+                .lineSpacing(5)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("settings.folder-sync.status")
+            Text(backgroundTimingText)
+                .font(.caption)
+                .foregroundStyle(theme.muted)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("settings.folder-sync.timing")
+
+            if folderSync?.isConfigured == true {
+                HStack(spacing: 10) {
+                    Button {
+                        Task { await folderSync?.synchronizeNow() }
+                    } label: {
+                        Label(folderSync?.isSynchronizing == true ? "同步中" : "立即同步", systemImage: "arrow.triangle.2.circlepath")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(PaperButtonStyle(fill: theme.primarySoft))
+                    .disabled(folderSync?.isSynchronizing == true)
+                    .accessibilityIdentifier("settings.folder-sync.now")
+
+                    Button("更换文件夹") {
+                        folderSync?.requestFolderSelection()
+                    }
+                    .buttonStyle(PaperButtonStyle())
+                    .disabled(folderSync?.isSynchronizing == true)
+                    .accessibilityIdentifier("settings.folder-sync.replace")
+                }
+                Button("停止使用", role: .destructive) {
+                    confirmsStop = true
+                }
+                .disabled(folderSync?.isSynchronizing == true)
+                .accessibilityIdentifier("settings.folder-sync.stop")
+            } else {
+                Button {
+                    folderSync?.requestFolderSelection()
+                } label: {
+                    Label("选择同步文件夹", systemImage: "folder.badge.plus")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(PaperButtonStyle(fill: theme.primarySoft))
+                .accessibilityIdentifier("settings.folder-sync.choose")
+            }
+        }
+        .padding(21)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .paperCard()
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("settings.folder-sync.card")
+    }
+
+    private var backgroundTimingText: String {
+        #if os(iOS)
+        "打开 App、回到前台和本地改动后会尝试同步；后台刷新由系统决定时机，不能保证实时。"
+        #else
+        "打开 App、回到前台和本地改动后会尝试同步；Mac 仅在 App 活跃时执行。"
+        #endif
     }
 
     #if os(iOS)
@@ -490,44 +587,4 @@ private struct LedgerProfileView: View {
     }
     #endif
 
-    private var syncTitle: String {
-        switch model.syncState {
-        case .localOnly: "本地账本"
-        case .checking: "正在检查 iCloud"
-        case .available: "iCloud 自动同步"
-        case .syncing: "正在同步"
-        case .unavailable: "iCloud 同步暂停"
-        case .error: "iCloud 同步异常"
-        }
-    }
-
-    private var syncSymbol: String {
-        switch model.syncState {
-        case .localOnly: "internaldrive"
-        case .checking, .syncing: "arrow.triangle.2.circlepath.icloud"
-        case .available: "checkmark.icloud"
-        case .unavailable, .error: "exclamationmark.icloud"
-        }
-    }
-
-    private var syncDetail: String {
-        switch model.syncState {
-        case .localOnly:
-            "数据仅保存在本机。"
-        case .checking:
-            "正在确认此设备的 Apple Account 和 iCloud 状态。"
-        case let .available(lastSuccessfulSync):
-            if let lastSuccessfulSync {
-                "数据保存在本机，并自动同步到 iCloud。最近同步：\(lastSuccessfulSync.formatted(date: .abbreviated, time: .shortened))。"
-            } else {
-                "数据保存在本机，并自动同步到 iCloud。"
-            }
-        case .syncing:
-            "正在上传或下载变更；本机记账可以继续使用。"
-        case let .unavailable(reason):
-            "\(reason) 本机数据仍可正常使用。"
-        case let .error(message):
-            "\(message) 本机数据未被清除，系统稍后会自动重试。"
-        }
-    }
 }

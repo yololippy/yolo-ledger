@@ -3,16 +3,24 @@ import YoloLedgerCore
 
 @main
 struct YoloLedgerIOSApp: App {
+    @State private var bootstrap: LedgerAppBootstrap
+
+    init() {
+        let bootstrap = LedgerAppBootstrap()
+        _bootstrap = State(initialValue: bootstrap)
+        FolderSyncBackgroundTasks.register(bootstrap: bootstrap)
+    }
+
     var body: some Scene {
         WindowGroup {
-            YoloLedgerIOSRoot()
+            YoloLedgerIOSRoot(bootstrap: bootstrap)
         }
     }
 }
 
 @MainActor
 private struct YoloLedgerIOSRoot: View {
-    @State private var bootstrap = LedgerAppBootstrap()
+    let bootstrap: LedgerAppBootstrap
     @State private var pendingScreenshotProposal = ScreenshotImportStore.load()
     @Environment(\.scenePhase) private var scenePhase
 

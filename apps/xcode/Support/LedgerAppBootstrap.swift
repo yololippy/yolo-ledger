@@ -1,6 +1,9 @@
 import Foundation
 import Observation
 import SwiftUI
+#if os(iOS)
+import BackgroundTasks
+#endif
 import YoloLedgerCore
 import YoloLedgerStorage
 import YoloLedgerUI
@@ -9,36 +12,45 @@ import YoloLedgerUI
 @Observable
 final class LedgerAppBootstrap {
     private(set) var repository: (any LedgerRepository)?
+    private(set) var folderSyncCoordinator: LedgerFolderSyncCoordinator?
+    let folderSyncController = LedgerFolderSyncController()
     private(set) var failure: String?
     private(set) var isOpening = false
     #if DEBUG
     private var failsOnce = ProcessInfo.processInfo.arguments.contains("--ui-test-fail-open-once")
     #endif
 
-    func open() {
+    func open(synchronizeAfterOpening: Bool = true) {
         guard repository == nil, !isOpening else { return }
         isOpening = true
         failure = nil
         defer { isOpening = false }
         do {
-            let configuration = try storeConfiguration()
+            let storeURL = try storeURL()
             #if DEBUG
             if failsOnce {
                 failsOnce = false
                 throw LaunchError.injectedFailure
             }
             #endif
-            repository = try SwiftDataLedgerRepository(
-                storeURL: configuration.url,
-                syncMode: configuration.syncMode
-            )
+            let repository = try SwiftDataLedgerRepository(storeURL: storeURL, syncMode: .local)
+            self.repository = repository
+            if isUITestStore {
+                folderSyncController.update(folderName: nil, state: .notConfigured)
+            } else {
+                folderSyncCoordinator = LedgerFolderSyncCoordinator(
+                    synchronizer: repository,
+                    controller: folderSyncController
+                )
+                folderSyncCoordinator?.start(synchronizeImmediately: synchronizeAfterOpening)
+            }
         } catch {
             let detail = (error as? any LocalizedError)?.errorDescription ?? "请检查本机存储空间或稍后重试。"
             failure = "本地账库无法打开。\(detail)"
         }
     }
 
-    private func storeConfiguration() throws -> (url: URL, syncMode: LedgerSyncMode) {
+    private func storeURL() throws -> URL {
         let standard = try SwiftDataLedgerRepository.defaultStoreURL()
         #if DEBUG
         let args = ProcessInfo.processInfo.arguments
@@ -50,10 +62,18 @@ final class LedgerAppBootstrap {
                 .appendingPathComponent("UITests", isDirectory: true)
                 .appendingPathComponent(id.uuidString, isDirectory: true)
                 .appendingPathComponent("ledger.store", isDirectory: false)
-            return (url, .local)
+            return url
         }
         #endif
-        return (standard, YoloLedgerICloud.syncMode)
+        return standard
+    }
+
+    private var isUITestStore: Bool {
+        #if DEBUG
+        ProcessInfo.processInfo.arguments.contains("--ui-test-store")
+        #else
+        false
+        #endif
     }
 }
 
@@ -85,7 +105,8 @@ struct LedgerAppContent: View {
             if let repository = bootstrap.repository {
                 YoloLedgerRootView(
                     repository: repository,
-                    pendingScreenshotProposal: $pendingScreenshotProposal
+                    pendingScreenshotProposal: $pendingScreenshotProposal,
+                    folderSync: bootstrap.folderSyncController
                 )
             } else if let failure = bootstrap.failure {
                 ContentUnavailableView {
@@ -103,45 +124,315 @@ struct LedgerAppContent: View {
         .ledgerTheme(.pastel)
         .task {
             bootstrap.open()
-            await ICloudDocumentsBootstrap.prepareIfNeeded()
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active {
+                bootstrap.folderSyncCoordinator?.becameActive()
+            }
         }
     }
+    @Environment(\.scenePhase) private var scenePhase
 }
 
-private enum ICloudDocumentsBootstrap {
-    private static let completionKey = "icloud-documents-bootstrap-v1"
+@MainActor
+final class LedgerFolderSyncCoordinator {
+    private let synchronizer: any LedgerFolderSyncing
+    private let controller: LedgerFolderSyncController
+    private let defaults: UserDefaults
+    private let deviceID: UUID
+    private var syncTask: Task<Bool, Never>?
+    private var debounceTask: Task<Void, Never>?
+    private var needsAnotherSync = false
+    private var hasStarted = false
 
-    static func prepareIfNeeded() async {
-        #if DEBUG
-        if ProcessInfo.processInfo.arguments.contains("--ui-test-store") { return }
+    init(
+        synchronizer: any LedgerFolderSyncing,
+        controller: LedgerFolderSyncController,
+        defaults: UserDefaults = .standard
+    ) {
+        self.synchronizer = synchronizer
+        self.controller = controller
+        self.defaults = defaults
+        self.deviceID = Self.loadOrCreateDeviceID(defaults: defaults)
+        controller.installActions(
+            selectFolder: { [weak self] url in await self?.selectFolder(url) },
+            synchronize: { [weak self] in _ = await self?.synchronizeNow() },
+            stop: { [weak self] in self?.stopUsingFolder() },
+            localMutation: { [weak self] in self?.localDataDidChange() }
+        )
+    }
+
+    func start(synchronizeImmediately: Bool = true) {
+        guard !hasStarted else { return }
+        hasStarted = true
+        restoreConfiguration()
+        if synchronizeImmediately, controller.isConfigured {
+            Task { _ = await synchronizeNow() }
+        }
+    }
+
+    func becameActive() {
+        guard hasStarted, controller.isConfigured else { return }
+        Task { _ = await synchronizeNow() }
+    }
+
+    func localDataDidChange() {
+        guard controller.isConfigured else { return }
+        debounceTask?.cancel()
+        debounceTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(1))
+            guard !Task.isCancelled else { return }
+            _ = await self?.synchronizeNow()
+        }
+    }
+
+    @discardableResult
+    func synchronizeNow() async -> Bool {
+        debounceTask?.cancel()
+        debounceTask = nil
+        if let syncTask {
+            needsAnotherSync = true
+            return await syncTask.value
+        }
+        guard defaults.data(forKey: FolderSyncPreferences.bookmarkKey) != nil else {
+            controller.update(folderName: nil, state: .notConfigured)
+            return false
+        }
+
+        let task = Task { [weak self] in
+            guard let self else { return false }
+            return await self.performSync()
+        }
+        syncTask = task
+        let succeeded = await task.value
+        syncTask = nil
+
+        if needsAnotherSync {
+            needsAnotherSync = false
+            Task { [weak self] in _ = await self?.synchronizeNow() }
+        }
+        return succeeded
+    }
+
+    func cancelCurrentSync() {
+        syncTask?.cancel()
+    }
+
+    private func selectFolder(_ url: URL) async {
+        let accessed = url.startAccessingSecurityScopedResource()
+        guard accessed else {
+            controller.update(folderName: url.lastPathComponent, state: .failed(message: "没有所选文件夹的访问权限。"))
+            return
+        }
+        defer { url.stopAccessingSecurityScopedResource() }
+
+        do {
+            let bookmark = try Self.createBookmark(for: url)
+            defaults.set(bookmark, forKey: FolderSyncPreferences.bookmarkKey)
+            defaults.set(url.lastPathComponent, forKey: FolderSyncPreferences.folderNameKey)
+            clearLastReport()
+            controller.update(folderName: url.lastPathComponent, state: .idle(lastReport: nil))
+            #if os(iOS)
+            FolderSyncBackgroundTasks.schedule()
+            #endif
+            _ = await synchronizeNow()
+        } catch {
+            controller.update(folderName: url.lastPathComponent, state: .failed(message: Self.message(for: error)))
+        }
+    }
+
+    private func stopUsingFolder() {
+        debounceTask?.cancel()
+        syncTask?.cancel()
+        debounceTask = nil
+        syncTask = nil
+        needsAnotherSync = false
+        defaults.removeObject(forKey: FolderSyncPreferences.bookmarkKey)
+        defaults.removeObject(forKey: FolderSyncPreferences.folderNameKey)
+        clearLastReport()
+        controller.update(folderName: nil, state: .notConfigured)
+        #if os(iOS)
+        FolderSyncBackgroundTasks.cancelPending()
         #endif
-        guard !UserDefaults.standard.bool(forKey: completionKey) else { return }
+    }
 
-        let prepared = await Task.detached(priority: .utility) {
-            let fileManager = FileManager.default
-            guard let containerURL = fileManager.url(
-                forUbiquityContainerIdentifier: YoloLedgerICloud.containerIdentifier
-            ) else { return false }
-
-            let documentsURL = containerURL.appendingPathComponent("Documents", isDirectory: true)
-            let welcomeURL = documentsURL.appendingPathComponent("关于有落.txt", isDirectory: false)
-            do {
-                try fileManager.createDirectory(at: documentsURL, withIntermediateDirectories: true)
-                if !fileManager.fileExists(atPath: welcomeURL.path) {
-                    let content = """
-                    有落 · YoloLedger
-
-                    此目录用于保存你主动创建的账单导出、备份和后续附件。
-                    日常记账数据由有落在本机保存，并通过 iCloud 自动同步。
-                    """
-                    try Data(content.utf8).write(to: welcomeURL, options: .atomic)
-                }
-                return true
-            } catch {
-                return false
+    private func restoreConfiguration() {
+        guard let bookmark = defaults.data(forKey: FolderSyncPreferences.bookmarkKey) else {
+            controller.update(folderName: nil, state: .notConfigured)
+            return
+        }
+        do {
+            var isStale = false
+            let url = try Self.resolveBookmark(bookmark, isStale: &isStale)
+            if isStale {
+                let accessed = url.startAccessingSecurityScopedResource()
+                guard accessed else { throw FolderSyncAccessError.permissionDenied }
+                defer { url.stopAccessingSecurityScopedResource() }
+                defaults.set(try Self.createBookmark(for: url), forKey: FolderSyncPreferences.bookmarkKey)
             }
-        }.value
+            let name = url.lastPathComponent
+            defaults.set(name, forKey: FolderSyncPreferences.folderNameKey)
+            controller.update(folderName: name, state: .idle(lastReport: loadLastReport()))
+            #if os(iOS)
+            FolderSyncBackgroundTasks.schedule()
+            #endif
+        } catch {
+            let name = defaults.string(forKey: FolderSyncPreferences.folderNameKey)
+            controller.update(folderName: name, state: .failed(message: "同步文件夹权限已失效，请更换文件夹。"))
+        }
+    }
 
-        if prepared { UserDefaults.standard.set(true, forKey: completionKey) }
+    private func performSync() async -> Bool {
+        guard let bookmark = defaults.data(forKey: FolderSyncPreferences.bookmarkKey) else { return false }
+        let fallbackName = defaults.string(forKey: FolderSyncPreferences.folderNameKey)
+        controller.update(folderName: fallbackName, state: .syncing)
+        do {
+            var isStale = false
+            let url = try Self.resolveBookmark(bookmark, isStale: &isStale)
+            let accessed = url.startAccessingSecurityScopedResource()
+            guard accessed else { throw FolderSyncAccessError.permissionDenied }
+            defer { url.stopAccessingSecurityScopedResource() }
+
+            if isStale {
+                defaults.set(try Self.createBookmark(for: url), forKey: FolderSyncPreferences.bookmarkKey)
+            }
+            try Task.checkCancellation()
+            let report = try await synchronizer.synchronize(folderURL: url, deviceID: deviceID)
+            try Task.checkCancellation()
+            saveLastReport(report)
+            controller.reportSuccessfulSync(folderName: url.lastPathComponent, report: report)
+            #if os(iOS)
+            FolderSyncBackgroundTasks.schedule()
+            #endif
+            return true
+        } catch is CancellationError {
+            controller.update(folderName: fallbackName, state: .idle(lastReport: loadLastReport()))
+            return false
+        } catch {
+            controller.update(folderName: fallbackName, state: .failed(message: Self.message(for: error)))
+            #if os(iOS)
+            FolderSyncBackgroundTasks.schedule()
+            #endif
+            return false
+        }
+    }
+
+    private func saveLastReport(_ report: LedgerFolderSyncReport) {
+        defaults.set(report.completedAt.timeIntervalSince1970, forKey: FolderSyncPreferences.completedAtKey)
+        defaults.set(report.importedRecordCount, forKey: FolderSyncPreferences.importedCountKey)
+        defaults.set(report.exportedRecordCount, forKey: FolderSyncPreferences.exportedCountKey)
+    }
+
+    private func loadLastReport() -> LedgerFolderSyncReport? {
+        guard defaults.object(forKey: FolderSyncPreferences.completedAtKey) != nil else { return nil }
+        return LedgerFolderSyncReport(
+            importedRecordCount: defaults.integer(forKey: FolderSyncPreferences.importedCountKey),
+            exportedRecordCount: defaults.integer(forKey: FolderSyncPreferences.exportedCountKey),
+            completedAt: Date(timeIntervalSince1970: defaults.double(forKey: FolderSyncPreferences.completedAtKey))
+        )
+    }
+
+    private func clearLastReport() {
+        defaults.removeObject(forKey: FolderSyncPreferences.completedAtKey)
+        defaults.removeObject(forKey: FolderSyncPreferences.importedCountKey)
+        defaults.removeObject(forKey: FolderSyncPreferences.exportedCountKey)
+    }
+
+    private static func loadOrCreateDeviceID(defaults: UserDefaults) -> UUID {
+        if let value = defaults.string(forKey: FolderSyncPreferences.deviceIDKey), let id = UUID(uuidString: value) {
+            return id
+        }
+        let id = UUID()
+        defaults.set(id.uuidString, forKey: FolderSyncPreferences.deviceIDKey)
+        return id
+    }
+
+    private static func createBookmark(for url: URL) throws -> Data {
+        #if os(macOS)
+        try url.bookmarkData(options: [.withSecurityScope], includingResourceValuesForKeys: nil, relativeTo: nil)
+        #else
+        try url.bookmarkData(options: [.minimalBookmark], includingResourceValuesForKeys: nil, relativeTo: nil)
+        #endif
+    }
+
+    private static func resolveBookmark(_ data: Data, isStale: inout Bool) throws -> URL {
+        #if os(macOS)
+        try URL(resolvingBookmarkData: data, options: [.withSecurityScope, .withoutUI], relativeTo: nil, bookmarkDataIsStale: &isStale)
+        #else
+        try URL(resolvingBookmarkData: data, options: [.withoutUI], relativeTo: nil, bookmarkDataIsStale: &isStale)
+        #endif
+    }
+
+    private static func message(for error: any Error) -> String {
+        if let localized = error as? any LocalizedError, let description = localized.errorDescription {
+            return description
+        }
+        return "文件夹同步失败，请稍后重试。"
     }
 }
+
+private enum FolderSyncPreferences {
+    static let bookmarkKey = "folder-sync.bookmark-v1"
+    static let folderNameKey = "folder-sync.folder-name-v1"
+    static let deviceIDKey = "folder-sync.device-id-v1"
+    static let completedAtKey = "folder-sync.completed-at-v1"
+    static let importedCountKey = "folder-sync.imported-count-v1"
+    static let exportedCountKey = "folder-sync.exported-count-v1"
+}
+
+private enum FolderSyncAccessError: LocalizedError {
+    case permissionDenied
+
+    var errorDescription: String? {
+        "无法访问同步文件夹，权限可能已被撤销。"
+    }
+}
+
+#if os(iOS)
+@MainActor
+enum FolderSyncBackgroundTasks {
+    static let identifier = "com.yololedger.app.folder-sync-refresh"
+    private static weak var bootstrap: LedgerAppBootstrap?
+    private static var isRegistered = false
+
+    static func register(bootstrap: LedgerAppBootstrap) {
+        self.bootstrap = bootstrap
+        guard !isRegistered else { return }
+        isRegistered = BGTaskScheduler.shared.register(forTaskWithIdentifier: identifier, using: nil) { task in
+            guard let refreshTask = task as? BGAppRefreshTask else {
+                task.setTaskCompleted(success: false)
+                return
+            }
+            let work = Task { @MainActor in
+                guard let currentBootstrap = FolderSyncBackgroundTasks.bootstrap else {
+                    refreshTask.setTaskCompleted(success: false)
+                    return
+                }
+                currentBootstrap.open(synchronizeAfterOpening: false)
+                guard let coordinator = currentBootstrap.folderSyncCoordinator else {
+                    refreshTask.setTaskCompleted(success: false)
+                    return
+                }
+                let succeeded = await coordinator.synchronizeNow()
+                refreshTask.setTaskCompleted(success: succeeded)
+            }
+            refreshTask.expirationHandler = {
+                work.cancel()
+                Task { @MainActor in
+                    FolderSyncBackgroundTasks.bootstrap?.folderSyncCoordinator?.cancelCurrentSync()
+                }
+            }
+        }
+    }
+
+    static func schedule() {
+        let request = BGAppRefreshTaskRequest(identifier: identifier)
+        request.earliestBeginDate = Date(timeIntervalSinceNow: 15 * 60)
+        try? BGTaskScheduler.shared.submit(request)
+    }
+
+    static func cancelPending() {
+        BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: identifier)
+    }
+}
+#endif

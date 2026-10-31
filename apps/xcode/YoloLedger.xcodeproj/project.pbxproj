@@ -688,29 +688,10 @@
 							"com.apple.BackgroundModes" = {
 								"enabled" = 1;
 							};
-							"com.apple.Push" = {
-								"enabled" = 1;
-							};
-							"com.apple.iCloud" = {
-								"enabled" = 1;
-							};
 						};
 					};
 					"4EF992AAC832339008981130" = {
 						"TestTargetID" = "DA01A563512A61CED9C1988A";
-					};
-					"DA01A563512A61CED9C1988A" = {
-						"SystemCapabilities" = {
-							"com.apple.BackgroundModes" = {
-								"enabled" = 1;
-							};
-							"com.apple.Push" = {
-								"enabled" = 1;
-							};
-							"com.apple.iCloud" = {
-								"enabled" = 1;
-							};
-						};
 					};
 					"569B6DCF629BDAED16D4A2D1" = {
 						"TestTargetID" = "3A747228B6663AA6FDE93B25";
