@@ -176,7 +176,7 @@ struct EntryEditorView: View {
                     }
                 }
             }
-        }.padding(.horizontal,14).padding(.top,13).padding(.bottom,10)
+        }.padding(.horizontal,14).padding(.top,13).padding(.bottom,keypadBottomPadding)
             .background(keypadBackground.ignoresSafeArea(edges: .bottom))
             .overlay(alignment: .top) { Rectangle().fill(theme.ink).frame(height: 1.4) }
     }
@@ -222,7 +222,7 @@ struct EntryEditorView: View {
             #endif
         }
         .padding(.horizontal, 11)
-        .padding(.vertical, 13)
+        .padding(.vertical, inputCardVerticalPadding)
         .paperCard()
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("editor.input-card")
@@ -242,6 +242,22 @@ struct EntryEditorView: View {
     }
 
     private var keypadBackground: Color { theme.keypadBackground }
+
+    private var inputCardVerticalPadding: CGFloat {
+        #if os(iOS)
+        9
+        #else
+        13
+        #endif
+    }
+
+    private var keypadBottomPadding: CGFloat {
+        #if os(iOS)
+        2
+        #else
+        10
+        #endif
+    }
 
     @ViewBuilder private func keypadButton(_ key: String) -> some View {
         let button = Button {
