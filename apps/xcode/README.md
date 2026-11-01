@@ -19,7 +19,9 @@
 
 App 组装层还把 Storage 的喵喵记账批量导入处理器注入共享 UI。共享 UI 只产生 Core 导入计划；Storage 在写入前创建本地备份并返回导入报告，App 再通知文件夹同步控制器本地数据已变化。DEBUG 参数 `--ui-test-meow-import` 只注入脱敏的内存 CSV 选择动作，真实 App 始终使用 iPhone／Mac 系统文件选择器。
 
-两个 App Target 不再申请 CloudKit、iCloud Documents、推送或远程通知能力。“我的”页面由用户选择 iCloud Drive 或普通可写文件夹，App 保存 security-scoped bookmark 和随机、稳定的安装设备 ID；每次文件读写都在安全访问期间内执行。启动时的自动同步延后 750 毫秒，让本地首屏查询优先完成；选定、回到前台和本地写入后仍会尝试同步，同一时刻只有一个同步任务。iPhone 额外使用 best-effort `BGAppRefreshTask`，系统决定何时执行；Mac 仅在 App 活跃时执行。
+iPhone App 还把同一个 `SwiftDataLedgerRepository` 作为 `LedgerScheduledEntryRepository` 注入定时记账 controller。启动和回到前台后以公历及手机当前本地时区异步处理到期规则，成功后通知共享 UI 刷新账目；不会阻塞首屏。保存启用规则或恢复规则后会立即处理已经到期的当月账目；暂停、删除或保存暂停规则只重排后续任务。已有 `BGAppRefreshTask` 先补记再尝试文件夹同步，使本轮新生成账目可在同一次后台任务导出，实际后台时机仍由 iOS 决定；规则与 occurrence 本身仍不进入文件夹同步。规则变化或处理完成后只安排一个下一到期本地通知；首次保存启用规则时才请求通知权限，拒绝不会影响自动补记，通知内容不包含金额或备注。Mac 不创建 controller、处理任务或通知能力。
+
+两个 App Target 不申请 CloudKit、iCloud Documents、推送或远程通知能力；iPhone 的到期提示是设备本地通知。“我的”页面由用户选择 iCloud Drive 或普通可写文件夹，App 保存 security-scoped bookmark 和随机、稳定的安装设备 ID；每次文件读写都在安全访问期间内执行。启动时的自动同步延后 750 毫秒，让本地首屏查询优先完成；选定、回到前台和本地写入后仍会尝试同步，同一时刻只有一个同步任务。Mac 现有构建兼容性保留，但当前阶段暂停新增功能和产品验收。
 
 `Resources/Assets.xcassets` 同时编入 iPhone 与 Mac Target，`AppIcon` 使用已选定的有落记账亮系统蓝图标；iOS 使用 1024 × 1024 master，macOS 使用同一源图生成的标准多尺寸资源。
 
@@ -79,6 +81,13 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild \
 ```
 
 重复执行需要新的 `.xcresult` 路径。仅运行导航／选项可加 `-only-testing:YoloLedgerIOSUITests/NavigationSmokeTests/testFourDestinationsAreReachable`。
+
+## iPhone 定时记账验证（2026-11-01）
+
+- `YoloLedgerUI` 35 项状态测试通过，其中 10 项覆盖定时规则读取重试、启用保存即时处理回调、暂停规则只重排、暂停／恢复／删除、编辑与未来状态切换月份边界、生成数量回调门槛、写入失败和处理后刷新。
+- iPhone Simulator Debug 构建通过。专项 UI 用例使用独立测试账库，直接经过 Storage 的 SwiftData 规则实现；`--ui-test-scheduled-entries` 只抑制真实通知权限请求。用例覆盖入口、新建、当月到期即时入账、编辑、暂停和删除核心路径，结果为 `/tmp/yolo-ledger-scheduled-ui-5.xcresult`。
+- 后台刷新和本地通知只完成代码与模拟器构建验证；iOS 是否实际授予执行时机、通知在锁屏／杀进程状态下是否到达，仍需真机验收。规则文件夹同步不在本轮范围。
+- Mac 仅保留编译兼容：没有定时记账入口、运行时处理或通知；不把 Mac 构建通过描述为功能实现或产品验收。
 
 ## 用户选择文件夹同步验证（2026-10-31）
 

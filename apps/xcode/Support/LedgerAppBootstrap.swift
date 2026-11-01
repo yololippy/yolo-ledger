@@ -3,6 +3,7 @@ import Observation
 import SwiftUI
 #if os(iOS)
 import BackgroundTasks
+import UserNotifications
 #endif
 import YoloLedgerCore
 import YoloLedgerStorage
@@ -15,6 +16,10 @@ final class LedgerAppBootstrap {
     private(set) var folderSyncCoordinator: LedgerFolderSyncCoordinator?
     let folderSyncController = LedgerFolderSyncController()
     let meowImportController = LedgerMeowImportController()
+    private(set) var scheduledEntryController: LedgerScheduledEntryController?
+    #if os(iOS)
+    private(set) var scheduledEntryCoordinator: LedgerScheduledEntryCoordinator?
+    #endif
     private(set) var failure: String?
     private(set) var isOpening = false
     #if DEBUG
@@ -60,6 +65,29 @@ final class LedgerAppBootstrap {
                     Self.meowImportUITestDocuments
                 }
             }
+            #endif
+            #if os(iOS)
+            let scheduledRepository: any LedgerScheduledEntryRepository = repository
+            let controller = LedgerScheduledEntryController(repository: scheduledRepository)
+            let coordinator = LedgerScheduledEntryCoordinator(
+                repository: scheduledRepository,
+                controller: controller,
+                generatedEntriesAction: { [folderSyncController] in
+                    folderSyncController.localDataDidChange()
+                },
+                suppressNotifications: ProcessInfo.processInfo.arguments.contains("--ui-test-scheduled-entries")
+            )
+            controller.installActions(
+                enabledRuleSaved: { [weak coordinator] in
+                    await coordinator?.enabledRuleWasSaved()
+                },
+                rulesChanged: { [weak coordinator] in
+                    await coordinator?.rulesDidChange()
+                }
+            )
+            scheduledEntryController = controller
+            scheduledEntryCoordinator = coordinator
+            coordinator.start()
             #endif
             if isUITestStore {
                 folderSyncController.update(folderName: nil, state: .notConfigured)
@@ -170,7 +198,8 @@ struct LedgerAppContent: View {
                     repository: repository,
                     pendingScreenshotProposal: $pendingScreenshotProposal,
                     folderSync: bootstrap.folderSyncController,
-                    meowImport: bootstrap.meowImportController
+                    meowImport: bootstrap.meowImportController,
+                    scheduledEntries: bootstrap.scheduledEntryController
                 )
             } else if let failure = bootstrap.failure {
                 ContentUnavailableView {
@@ -201,6 +230,9 @@ struct LedgerAppContent: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
                 bootstrap.folderSyncCoordinator?.becameActive()
+                #if os(iOS)
+                bootstrap.scheduledEntryCoordinator?.becameActive()
+                #endif
             }
         }
     }
@@ -333,9 +365,7 @@ final class LedgerFolderSyncCoordinator {
         defaults.removeObject(forKey: FolderSyncPreferences.folderNameKey)
         clearLastReport()
         controller.update(folderName: nil, state: .notConfigured)
-        #if os(iOS)
-        FolderSyncBackgroundTasks.cancelPending()
-        #endif
+        // A pending refresh may also belong to scheduled entries; let it run once instead of cancelling it.
     }
 
     private func restoreConfiguration() {
@@ -498,17 +528,24 @@ enum FolderSyncBackgroundTasks {
                     return
                 }
                 await currentBootstrap.open(synchronizeAfterOpening: false)
-                guard let coordinator = currentBootstrap.folderSyncCoordinator else {
-                    refreshTask.setTaskCompleted(success: false)
-                    return
+                let scheduledSucceeded = if let coordinator = currentBootstrap.scheduledEntryCoordinator {
+                    await coordinator.processDueEntries()
+                } else {
+                    true
                 }
-                let succeeded = await coordinator.synchronizeNow()
-                refreshTask.setTaskCompleted(success: succeeded)
+                let syncSucceeded = if currentBootstrap.folderSyncController.isConfigured,
+                                       let coordinator = currentBootstrap.folderSyncCoordinator {
+                    await coordinator.synchronizeNow()
+                } else {
+                    true
+                }
+                refreshTask.setTaskCompleted(success: syncSucceeded && scheduledSucceeded)
             }
             refreshTask.expirationHandler = {
                 work.cancel()
                 Task { @MainActor in
                     FolderSyncBackgroundTasks.bootstrap?.folderSyncCoordinator?.cancelCurrentSync()
+                    FolderSyncBackgroundTasks.bootstrap?.scheduledEntryCoordinator?.cancelCurrentProcessing()
                 }
             }
         }
@@ -520,8 +557,159 @@ enum FolderSyncBackgroundTasks {
         try? BGTaskScheduler.shared.submit(request)
     }
 
-    static func cancelPending() {
-        BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: identifier)
+}
+
+@MainActor
+final class LedgerScheduledEntryCoordinator {
+    typealias GeneratedEntriesAction = @MainActor @Sendable () -> Void
+
+    private static let notificationIdentifier = "scheduled-entry.next-due"
+    private static let permissionRequestedKey = "scheduled-entry.notification-permission-requested-v1"
+
+    private let repository: any LedgerScheduledEntryRepository
+    private let controller: LedgerScheduledEntryController
+    private let generatedEntriesAction: GeneratedEntriesAction
+    private let notificationCenter: UNUserNotificationCenter
+    private let defaults: UserDefaults
+    private let suppressNotifications: Bool
+    private var processingTask: Task<Bool, Never>?
+
+    init(
+        repository: any LedgerScheduledEntryRepository,
+        controller: LedgerScheduledEntryController,
+        generatedEntriesAction: @escaping GeneratedEntriesAction = {},
+        notificationCenter: UNUserNotificationCenter = .current(),
+        defaults: UserDefaults = .standard,
+        suppressNotifications: Bool = false
+    ) {
+        self.repository = repository
+        self.controller = controller
+        self.generatedEntriesAction = generatedEntriesAction
+        self.notificationCenter = notificationCenter
+        self.defaults = defaults
+        self.suppressNotifications = suppressNotifications
+    }
+
+    func start() {
+        Task { [weak self] in _ = await self?.processDueEntries() }
+    }
+
+    func becameActive() {
+        Task { [weak self] in _ = await self?.processDueEntries() }
+    }
+
+    func enabledRuleWasSaved() async {
+        await requestNotificationPermissionIfNeeded()
+        _ = await processDueEntries()
+    }
+
+    func rulesDidChange() async {
+        await rescheduleNotification()
+        await scheduleBackgroundRefreshIfNeeded()
+    }
+
+    @discardableResult
+    func processDueEntries() async -> Bool {
+        if let processingTask { return await processingTask.value }
+        let task = Task { [weak self] in
+            guard let self else { return false }
+            return await self.performProcessing()
+        }
+        processingTask = task
+        let succeeded = await task.value
+        processingTask = nil
+        return succeeded
+    }
+
+    func cancelCurrentProcessing() {
+        processingTask?.cancel()
+    }
+
+    private func performProcessing() async -> Bool {
+        do {
+            let now = Date()
+            let calendar = Self.localGregorianCalendar(timeZone: .current)
+            let result = try await repository.processDueScheduledEntries(
+                now: now,
+                calendar: calendar,
+                timeZone: .current
+            )
+            try Task.checkCancellation()
+            LedgerScheduledEntryController.performGeneratedEntriesAction(
+                generatedCount: result.generatedCount
+            ) {
+                generatedEntriesAction()
+            }
+            await controller.reportSuccessfulProcessing(generatedCount: result.generatedCount)
+            await rescheduleNotification(after: now)
+            await scheduleBackgroundRefreshIfNeeded(after: now)
+            return true
+        } catch is CancellationError {
+            return false
+        } catch {
+            FolderSyncBackgroundTasks.schedule()
+            return false
+        }
+    }
+
+    private func requestNotificationPermissionIfNeeded() async {
+        guard !suppressNotifications,
+              !defaults.bool(forKey: Self.permissionRequestedKey)
+        else { return }
+        defaults.set(true, forKey: Self.permissionRequestedKey)
+        _ = try? await notificationCenter.requestAuthorization(options: [.alert, .sound])
+    }
+
+    private func rescheduleNotification(after now: Date = Date()) async {
+        guard !suppressNotifications else { return }
+        notificationCenter.removePendingNotificationRequests(withIdentifiers: [Self.notificationIdentifier])
+        let settings = await notificationCenter.notificationSettings()
+        guard settings.authorizationStatus == .authorized || settings.authorizationStatus == .provisional else { return }
+        do {
+            let calendar = Self.localGregorianCalendar(timeZone: .current)
+            guard let nextDate = try await repository.nextScheduledEntryDate(
+                after: now,
+                calendar: calendar,
+                timeZone: .current
+            ) else { return }
+            let content = UNMutableNotificationContent()
+            content.title = "定时记账提醒"
+            content.body = "有一笔定时账目已到期，打开\(YoloLedgerProduct.displayName)后会自动补记。"
+            content.sound = .default
+            var components = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: nextDate)
+            components.calendar = calendar
+            components.timeZone = .current
+            let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
+            try await notificationCenter.add(UNNotificationRequest(
+                identifier: Self.notificationIdentifier,
+                content: content,
+                trigger: trigger
+            ))
+        } catch {
+            // Notifications are best effort and never block scheduled-entry persistence.
+        }
+    }
+
+    private func scheduleBackgroundRefreshIfNeeded(after now: Date = Date()) async {
+        do {
+            let calendar = Self.localGregorianCalendar(timeZone: .current)
+            if try await repository.nextScheduledEntryDate(
+                after: now,
+                calendar: calendar,
+                timeZone: .current
+            ) != nil {
+                FolderSyncBackgroundTasks.schedule()
+            }
+        } catch {
+            // A failed query is retried the next time the App becomes active.
+        }
+    }
+
+    private static func localGregorianCalendar(timeZone: TimeZone) -> Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timeZone
+        return calendar
     }
 }
+
 #endif

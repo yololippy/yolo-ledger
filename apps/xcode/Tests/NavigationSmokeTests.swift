@@ -42,6 +42,59 @@ final class NavigationSmokeTests: XCTestCase {
     }
 
     #if os(iOS)
+    func testScheduledEntryCreateEditPauseAndDeleteFlow() throws {
+        let app = makeApplication()
+        app.launchArguments.append("--ui-test-scheduled-entries")
+        app.launch()
+
+        navigate(app, destination: "settings", title: "我的")
+        XCTAssertTrue(app.otherElements["settings.scheduled-entry.card"].waitForExistence(timeout: 15))
+        let openButton = app.buttons["settings.scheduled-entry.open"]
+        XCTAssertTrue(openButton.exists)
+        openButton.tap()
+
+        XCTAssertTrue(app.staticTexts["定时记账"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.descendants(matching: .any)["scheduled-entry.timing"].firstMatch.exists)
+        app.buttons["scheduled-entry.add"].tap()
+
+        XCTAssertTrue(app.staticTexts["新建定时记账"].waitForExistence(timeout: 5))
+        clearAndType(app.textFields["scheduled-entry.editor.amount"], text: "12.34")
+        clearAndType(app.textFields["scheduled-entry.editor.note"], text: "每月房租")
+        XCTAssertTrue(app.staticTexts["新规则从当前本地月份生效。"].exists)
+        app.buttons["scheduled-entry.editor.save"].tap()
+
+        XCTAssertTrue(app.staticTexts["每月房租"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["已启用"].exists)
+        let toggleButton = app.buttons.matching(
+            NSPredicate(format: "identifier BEGINSWITH %@", "scheduled-entry.toggle.")
+        ).firstMatch
+        XCTAssertTrue(toggleButton.exists)
+        toggleButton.tap()
+        XCTAssertTrue(app.staticTexts["已暂停"].waitForExistence(timeout: 5))
+
+        let editButton = app.buttons.matching(
+            NSPredicate(format: "identifier BEGINSWITH %@", "scheduled-entry.edit.")
+        ).firstMatch
+        editButton.tap()
+        XCTAssertTrue(app.staticTexts["只影响所选月份及之后的未来账目，已经生成的账目不会改变。"].waitForExistence(timeout: 5))
+        clearAndType(app.textFields["scheduled-entry.editor.note"], text: "调整后房租")
+        app.buttons["scheduled-entry.editor.save"].tap()
+        XCTAssertTrue(app.staticTexts["调整后房租"].waitForExistence(timeout: 10))
+
+        let deleteButton = app.buttons.matching(
+            NSPredicate(format: "identifier BEGINSWITH %@", "scheduled-entry.delete.")
+        ).firstMatch
+        deleteButton.tap()
+        let confirmDelete = app.buttons["scheduled-entry.delete.confirm"].firstMatch
+        XCTAssertTrue(confirmDelete.waitForExistence(timeout: 5))
+        confirmDelete.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["scheduled-entry.empty"].firstMatch.waitForExistence(timeout: 10))
+
+        app.buttons["scheduled-entry.done"].tap()
+        navigate(app, destination: "details", title: "明细")
+        XCTAssertTrue(app.staticTexts["每月房租"].waitForExistence(timeout: 10))
+    }
+
     func testMeowImportCardIsHiddenAfterOneTimeMigration() throws {
         let app = makeApplication()
         app.launch()

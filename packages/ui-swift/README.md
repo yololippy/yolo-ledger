@@ -28,10 +28,11 @@ Swift module / library：`YoloLedgerUI`，仅依赖本地 `YoloLedgerCore`。
 - 详情使用白色票据、虚线和锯齿底边，支持编辑与确认删除。账本支持新建、重命名、切换；“我的”提供选择、立即同步、更换和停止使用文件夹，并展示文件夹名、最后成功时间、导入／导出数量、同步中或错误状态。
 - 喵喵记账 CSV 导入作为一次性迁移能力保留在代码中，但完成迁移后不再显示于“我的”页面。`LedgerMeowImportController` 及预览、校验、备份和导入测试继续保留，后续需要时可重新开放入口。
 - 导入确认页明确说明不会修改喵喵记账数据，并会在写入前创建本地备份。UI 只依赖 Core 的导入计划；真实写入通过 App 组装层注入的异步动作交给 Storage，提交期间禁止重复操作。成功报告展示导入、跳过重复、创建账本／分类、收支汇总和备份目录名；失败保留预览与来源文件，可重新选择或取消。
+- iPhone“我的”在注入 `any LedgerScheduledEntryRepository` 时显示“定时记账”，支持新建、编辑、启用／暂停和删除。规则可选择账本、收入／支出、匹配类型的分类、精确金额、备注、每月 1...31 日或最后一天；新建从当前本地月份生效，编辑明确只影响所选当前／未来月份。`LedgerScheduledEntryController` 仅依赖 Core，repository 为 `nil` 时隐藏入口，Mac 不创建此运行时能力。
 - iPhone 快捷指令截图识别结果进入“确认截图记账”页面，预填金额、日期、商户备注和分类建议；用户确认保存后将来源记为 `.screenshotShortcut`。
 - iPhone“我的”页面提供“轻点两下，截图记账”三步设置指引和快捷指令跳转；系统的“轻点背面”绑定仍由用户在设置中完成。
 
-当前界面只是已实现功能的历史验证载体，后续以有落记账的品牌和交互设计为准。完整分类管理、图表、通用导入导出和定时记账仍属于后续阶段；用户选择文件夹的真实双设备验收单独跟踪。
+当前界面只是已实现功能的历史验证载体，后续以有落记账的品牌和交互设计为准。完整分类管理、图表和通用导入导出仍属于后续阶段；用户选择文件夹的真实双设备验收单独跟踪。
 
 ## 状态与数据
 
@@ -51,7 +52,7 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift build --package-p
 DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test --package-path packages/ui-swift
 ```
 
-2026-10-31：25 项状态测试通过。在原有读写、失败、账本、日历、并发刷新、文件夹同步和横向分页语义上，覆盖多文件导入状态，并确认初次加载只调用有界账目接口、不会退回全量读取；分类备注继续按 FIFO 保持 20 条。
+2026-11-01：35 项状态测试通过。在原有读写、失败、账本、日历、并发刷新、文件夹同步、导入和横向分页语义上，新增定时规则读取重试、启用保存即时处理回调、暂停规则只重排、暂停／恢复／删除、编辑历史规则默认当前月份、保留未来生效月份、未来规则状态切换月份及生成数量回调门槛、写入失败保留状态与处理后刷新覆盖。
 
 端到端流程、独立测试账库与报告见 [Xcode 工程说明](../../apps/xcode/README.md)。
 
@@ -64,5 +65,6 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test --package-pa
 - 详情：`entry.row.<UUID>`、`detail.amount`、`detail.note`、`entry.edit`、`entry.delete`、`entry.delete.confirm`、`detail.close`。票据按 `updatedAt` 重建，保持编辑后的辅助功能内容同步。
 - 账本／汇总：`ledger.book-picker`、`book.add`、`book.select.<UUID>`、`book.rename.<UUID>`、`book-editor.name`、`book-editor.save`、`summary.income`、`summary.expense`、`summary.balance`。
 - 喵喵导入：`settings.meow-import.card`、`settings.meow-import.choose`、`meow-import.metrics`、`meow-import.summary`、`meow-import.issues`、`meow-import.safety`、`meow-import.failure`、`meow-import.success`、`meow-import.reselect`、`meow-import.confirm`、`meow-import.cancel`、`meow-import.done`。
+- 定时记账：`settings.scheduled-entry.card`、`settings.scheduled-entry.open`、`scheduled-entry.timing`、`scheduled-entry.add`、`scheduled-entry.empty-add`、`scheduled-entry.rule.<UUID>`、`scheduled-entry.edit.<UUID>`、`scheduled-entry.toggle.<UUID>`、`scheduled-entry.delete.<UUID>`、`scheduled-entry.delete.confirm`，以及 `scheduled-entry.editor.*` 表单标识。
 
 Swift tools 6.0 / Swift 6；临时构建基线为 macOS 14 / iOS 17，正式最低支持版本仍待确定。仅面向 Mac / iPhone，iPadOS 暂不支持。

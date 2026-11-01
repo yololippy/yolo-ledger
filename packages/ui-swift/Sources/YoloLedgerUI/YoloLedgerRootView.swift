@@ -18,6 +18,7 @@ public struct YoloLedgerRootView: View {
     @State private var model: LedgerAppModel
     private let folderSync: LedgerFolderSyncController?
     private let meowImport: LedgerMeowImportController?
+    private let scheduledEntries: LedgerScheduledEntryController?
     @Binding private var pendingScreenshotProposal: LedgerScreenshotProposal?
     @State private var selection: LedgerDestination = .details
     @State private var showsNewEntry = false
@@ -31,10 +32,12 @@ public struct YoloLedgerRootView: View {
     public init(
         repository: any LedgerRepository,
         folderSync: LedgerFolderSyncController? = nil,
-        meowImport: LedgerMeowImportController? = nil
+        meowImport: LedgerMeowImportController? = nil,
+        scheduledEntries: LedgerScheduledEntryController? = nil
     ) {
         self.folderSync = folderSync
         self.meowImport = meowImport
+        self.scheduledEntries = scheduledEntries
         _model = State(initialValue: LedgerAppModel(
             repository: repository,
             onLocalMutation: { folderSync?.localDataDidChange() }
@@ -46,10 +49,12 @@ public struct YoloLedgerRootView: View {
         repository: any LedgerRepository,
         pendingScreenshotProposal: Binding<LedgerScreenshotProposal?>,
         folderSync: LedgerFolderSyncController? = nil,
-        meowImport: LedgerMeowImportController? = nil
+        meowImport: LedgerMeowImportController? = nil,
+        scheduledEntries: LedgerScheduledEntryController? = nil
     ) {
         self.folderSync = folderSync
         self.meowImport = meowImport
+        self.scheduledEntries = scheduledEntries
         _model = State(initialValue: LedgerAppModel(
             repository: repository,
             onLocalMutation: { folderSync?.localDataDidChange() }
@@ -95,6 +100,9 @@ public struct YoloLedgerRootView: View {
             Task { await model.refresh() }
         }
         .onChange(of: meowImport?.successfulImportRevision) { _, _ in
+            Task { await model.refresh() }
+        }
+        .onChange(of: scheduledEntries?.successfulProcessingRevision) { _, _ in
             Task { await model.refresh() }
         }
         .onChange(of: model.hasLoaded) { _, _ in presentPendingScreenshotIfReady() }
@@ -143,7 +151,29 @@ public struct YoloLedgerRootView: View {
                 LedgerMeowImportView(controller: meowImport)
             }
         }
+        #if os(iOS)
+        .sheet(
+            isPresented: scheduledEntryListIsPresented
+        ) {
+            if let scheduledEntries {
+                LedgerScheduledEntryView(
+                    controller: scheduledEntries,
+                    books: model.books,
+                    categories: model.categories
+                )
+            }
+        }
+        #endif
     }
+
+    #if os(iOS)
+    private var scheduledEntryListIsPresented: Binding<Bool> {
+        Binding(
+            get: { scheduledEntries?.isListPresented == true },
+            set: { if !$0 { scheduledEntries?.dismissList() } }
+        )
+    }
+    #endif
 
     private func presentPendingScreenshotIfReady() {
         guard let replacement = ScreenshotProposalPresentation.replacement(
@@ -248,7 +278,12 @@ public struct YoloLedgerRootView: View {
             case .bills, .details:
                 LedgerEntriesView(model: model, isMonthly: selection == .bills) { selectedEntry = $0 }
             case .books: LedgerBooksView(model: model)
-            case .settings: LedgerProfileView(folderSync: folderSync, meowImport: meowImport)
+            case .settings:
+                LedgerProfileView(
+                    folderSync: folderSync,
+                    meowImport: meowImport,
+                    scheduledEntries: scheduledEntries
+                )
             }
         }
     }
@@ -523,6 +558,7 @@ private struct LedgerProfileView: View {
     @Environment(\.openURL) private var openURL
     let folderSync: LedgerFolderSyncController?
     let meowImport: LedgerMeowImportController?
+    let scheduledEntries: LedgerScheduledEntryController?
     @State private var confirmsStop = false
 
     var body: some View {
@@ -535,6 +571,9 @@ private struct LedgerProfileView: View {
                 }.padding(.vertical, 12)
                 folderSyncCard
                 #if os(iOS)
+                if let scheduledEntries {
+                    scheduledEntryCard(scheduledEntries)
+                }
                 VStack(alignment: .leading, spacing: 16) {
                     Label("轻点两下，截图记账", systemImage: "hand.tap")
                         .font(.headline)
@@ -571,6 +610,36 @@ private struct LedgerProfileView: View {
             Text("本机账目会继续保留；文件夹中的交换文件不会被删除。")
         }
     }
+
+    #if os(iOS)
+    private func scheduledEntryCard(_ controller: LedgerScheduledEntryController) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Label("定时记账", systemImage: "calendar.badge.clock")
+                .font(.headline)
+            DashedRule()
+            Text("按每月固定日期或最后一天自动生成收入、支出；可随时编辑、暂停或删除规则。")
+                .font(.system(size: 14))
+                .lineSpacing(5)
+                .fixedSize(horizontal: false, vertical: true)
+            Text("后台执行时机由 iOS 决定；未及时执行会在下次打开 App 时补记。")
+                .font(.caption)
+                .foregroundStyle(theme.muted)
+            Button {
+                controller.presentList()
+            } label: {
+                Label("管理定时记账", systemImage: "chevron.right")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(PaperButtonStyle(fill: theme.primarySoft))
+            .accessibilityIdentifier("settings.scheduled-entry.open")
+        }
+        .padding(21)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .paperCard()
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("settings.scheduled-entry.card")
+    }
+    #endif
 
     private var meowImportCard: some View {
         VStack(alignment: .leading, spacing: 16) {
