@@ -24,10 +24,10 @@ Swift Package、library product 和模块名均为 `YoloLedgerCore`，目录为 
 - 表达式操作数可为零，每项最多两位小数且原始数字最多含一个小数点；纯整数后的尾点按整数额完成，例如 `12.` 等于 `12.00`，`12.+3.` 等于 `15.00`，而 `1.2.`、`1+0.0.` 必须报错。允许中间负数，最终结果必须大于零。
 - 表达式仅忽略整体首尾空白；不接受内部空白、一元正负号、悬空／连续运算符、括号、其他运算符或非法字符。语法错误抛出 `invalidAmountExpression`，操作数或逐步运算溢出抛出 `amountOverflow`，最终零／负数抛出 `nonPositiveAmount`，均有中文错误提示。
 - 表达式以 `Int64` 分执行 checked 加减，不使用浮点或动态求值，也不会为使最终结果可表示而忽略中途溢出。`LedgerAmount(input:)` 保持原有严格规则，仍不接受 `12.` 或表达式。
-- `LedgerEntryKind`：`.expense`、`.income`；`LedgerEntrySource` 包含手动记账 `.manual`、快捷指令截图记账 `.screenshotShortcut` 与喵喵记账导入 `.meowLedgerImport`。
+- `LedgerEntryKind`：`.expense`、`.income`；`LedgerEntrySource` 包含手动记账 `.manual`、快捷指令截图记账 `.screenshotShortcut`、喵喵记账导入 `.meowLedgerImport` 与定时记账 `.scheduled`。
 - `LedgerCategory`：`id: UUID`、`name: String`、`kind: LedgerEntryKind`。
-- `LedgerEntryDraft`：`bookID`、`categoryID`、`kind`、`amount`、`date`、`note`、`source` 和可选 `importMetadata`；`note` 默认空字符串，`source` 默认 `.manual`，`importMetadata` 默认 `nil`，现有调用保持兼容。
-- `LedgerEntry`：上述草稿内容加稳定 `id: UUID`、`createdAt` 和 `updatedAt`。通过 `init(id:draft:createdAt:updatedAt:)` 创建，`draft` 可取回可编辑内容及导入元数据。
+- `LedgerEntryDraft`：`bookID`、`categoryID`、`kind`、`amount`、`date`、`note`、`source`、可选 `importMetadata` 和可选 `scheduledOccurrence`；后三者默认 `.manual`／`nil`／`nil`，现有调用保持兼容。
+- `LedgerEntry`：上述草稿内容加稳定 `id: UUID`、`createdAt` 和 `updatedAt`。通过 `init(id:draft:createdAt:updatedAt:)` 创建，`draft` 可取回可编辑内容、导入元数据及定时 occurrence。
 
 金额、账本、分类、草稿和记录都是可跨并发边界传递的 `Sendable` 值对象。日期用 `Date` 保存绝对时刻，显示及时间范围按设备当前本地日历计算。
 
@@ -94,6 +94,21 @@ func synchronize(
 - 本地 SwiftData 始终是运行时真源，文件夹只是设备间交换层。Storage 负责文件格式、原子写入、读取校验，以及按业务 UUID 和 `updatedAt` / `deletedAt` 合并；Core 不依赖 SwiftData、CloudKit 或 SwiftUI。
 - 目录同步与现有 `LedgerSyncState` 分开表达：前者是用户主动配置的文件交换通道，后者保留现有仓库存储／云同步状态契约。
 
+### 每月定时记账契约
+
+`LedgerScheduledEntryRule` 是 Storage 与 iPhone UI 共用的规则快照，包含稳定规则 ID、账本、分类、收支方向、精确金额、备注、月内日期、启用状态、生效月份及创建／更新时间：
+
+- `LedgerMonthlyDay.fixed(1...31)` 表示每月固定日期；当月没有该日时自动落在当月最后一天。`.lastDay` 始终使用当月最后一天，包含闰年二月。
+- `LedgerYearMonth` 保存 `YYYY-MM`，并参与稳定 occurrence 身份。`LedgerScheduledOccurrenceIdentity` 固定生成 `<小写 rule UUID>:<YYYY-MM>`；同一规则每月只有一个语义 occurrence。
+- `LedgerScheduledEntryPlanner.dueOccurrences(for:through:excluding:calendar:timeZone:)` 返回从规则生效月份到 `now` 已到期且未处理的 occurrence，按月份升序排列。每项包含 `.scheduled` 来源、完整 `LedgerEntryDraft` 和 `LedgerScheduledOccurrenceMetadata`。
+- `excluding` 必须同时传入已存在账目和已删除账目的 occurrence key。Storage 删除生成账目时保留 tombstone／处理记录，之后不会重新补建。
+- 禁用规则不补记；恢复时创建从恢复月份生效的规则快照，因此暂停月份不会追补。修改时沿用原 rule ID，并让新快照从选定未来月份生效；旧 occurrence 的 key 和账目内容不改变。
+- `nextExecutionDate(for:after:calendar:timeZone:)` 返回严格晚于 `now` 的下一次本地日历起始时刻，禁用时返回 `nil`。
+- 所有日期运算显式接受 `Calendar` 和 `TimeZone`，Core 不写死时区。iPhone 运行时应使用稳定的公历规则并注入设备当前系统时区；时区变化后重新计算绝对执行时刻。
+- Core 不负责后台定时、持久化或通知。Storage 负责规则、有效版本和 occurrence/tombstone 的原子保存；iPhone App 在启动、回到前台及系统允许的后台时机调用纯算法。当前不要求接入 Mac UI。
+- `LedgerScheduledEntryRepository: Sendable` 是独立于 `LedgerRepository` 的注入边界，没有关联类型，可直接作为 existential 或由闭包适配。它提供当前规则列表、保存有效版本、暂停、显式恢复月份、删除、原子处理全部到期规则，以及所有启用规则中的下一到期时间。
+- `LedgerScheduledProcessingResult` 返回本轮新建的 `[LedgerEntry]`、由其派生的生成数量，以及因 occurrence 已生成或已删除而跳过的数量。`LedgerScheduledEntryRepositoryError` 提供规则不存在和同月版本冲突两个可展示／判断的领域错误；具体数据库错误继续由 Storage 原样抛出。
+
 ### 日期范围与最小汇总
 
 - `LedgerPeriod`：`.day`、`.week`、`.month`、`.year`。
@@ -128,8 +143,8 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test --package-pa
 
 Manifest 使用 `swift-tools-version: 6.0`，Swift 语言模式为 6。临时构建基线为 macOS 14 / iOS 17；产品最低支持系统版本仍待 main 确认。
 
-验证记录（2026-10-31）：使用指定 Xcode 的 Swift 6.4 / arm64 环境运行上述测试命令，构建通过，**72 项测试全部通过**。其中 8 项脱敏 CSV 导入测试覆盖 BOM、CRLF、RFC 4180 引号／逗号／跨行字段、收支、逐行错误、零值／溢出、注入时区、合法重复记录、稳定去重键和元数据兼容；3 项文件夹同步契约测试覆盖目录 URL 与稳定设备 UUID 的传递、报告值和完整 UI 状态；10 项脱敏文字规则测试与 7 项原图 Vision 集成测试继续覆盖截图识别；其余测试覆盖产品元数据、金额、表达式、汇总、本地日期范围、DST、关联校验、默认账本名称和分类种子。
+验证记录（2026-11-01）：使用指定 Xcode 的 Swift 6.4 / arm64 环境运行上述测试命令，构建通过，**82 项测试全部通过**。其中 8 项定时记账算法测试覆盖固定日期月底收敛、最后一天、闰年、注入时区、跨月补记、已处理／已删除 occurrence、暂停恢复、未来月份修改边界、下一执行日、稳定 key 和非法规则；2 项仓库边界测试覆盖 existential 注入、完整规则生命周期、原子处理结果、下一日期及领域错误；原有 72 项继续覆盖 CSV 导入、文件夹同步、截图识别、产品元数据、金额、表达式、汇总、本地日期范围、DST、关联校验、默认账本名称和分类种子。
 
 ## 后续业务约定
 
-手机端采用手机当前系统本地时区计算日期范围和定时规则；独立运行的 Mac 按同样原则使用本机系统时区。定时规则的具体行为由产品需求确定；跨设备幂等随 M4 在现有用户选定文件夹同步基础上设计。
+iPhone 采用手机当前系统本地时区计算日期范围和定时规则。当前只接入 iPhone App，Mac 端暂不开发；跨设备幂等后续沿用稳定 occurrence key 与用户选定文件夹同步。

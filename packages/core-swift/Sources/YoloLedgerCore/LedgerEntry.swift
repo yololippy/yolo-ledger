@@ -9,6 +9,7 @@ public enum LedgerEntrySource: String, Codable, Sendable {
     case manual
     case screenshotShortcut
     case meowLedgerImport
+    case scheduled
 }
 
 public enum LedgerEntryImportFormat: String, Codable, Sendable {
@@ -72,6 +73,7 @@ public struct LedgerEntryDraft: Equatable, Sendable {
     public let note: String
     public let source: LedgerEntrySource
     public let importMetadata: LedgerEntryImportMetadata?
+    public let scheduledOccurrence: LedgerScheduledOccurrenceMetadata?
 
     public init(
         bookID: UUID,
@@ -81,7 +83,8 @@ public struct LedgerEntryDraft: Equatable, Sendable {
         date: Date,
         note: String = "",
         source: LedgerEntrySource = .manual,
-        importMetadata: LedgerEntryImportMetadata? = nil
+        importMetadata: LedgerEntryImportMetadata? = nil,
+        scheduledOccurrence: LedgerScheduledOccurrenceMetadata? = nil
     ) {
         self.bookID = bookID
         self.categoryID = categoryID
@@ -91,6 +94,7 @@ public struct LedgerEntryDraft: Equatable, Sendable {
         self.note = note
         self.source = source
         self.importMetadata = importMetadata
+        self.scheduledOccurrence = scheduledOccurrence
     }
 }
 
@@ -104,6 +108,7 @@ public struct LedgerEntry: Identifiable, Equatable, Sendable {
     public let note: String
     public let source: LedgerEntrySource
     public let importMetadata: LedgerEntryImportMetadata?
+    public let scheduledOccurrence: LedgerScheduledOccurrenceMetadata?
     public let createdAt: Date
     public let updatedAt: Date
 
@@ -117,6 +122,7 @@ public struct LedgerEntry: Identifiable, Equatable, Sendable {
         self.note = draft.note
         self.source = draft.source
         self.importMetadata = draft.importMetadata
+        self.scheduledOccurrence = draft.scheduledOccurrence
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }
@@ -130,7 +136,8 @@ public struct LedgerEntry: Identifiable, Equatable, Sendable {
             date: date,
             note: note,
             source: source,
-            importMetadata: importMetadata
+            importMetadata: importMetadata,
+            scheduledOccurrence: scheduledOccurrence
         )
     }
 }
