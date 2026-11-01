@@ -121,6 +121,14 @@ final class NavigationSmokeTests: XCTestCase {
         XCTAssertTrue(noteField.waitForExistence(timeout: 5))
         XCTAssertTrue(amountLabel.waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["editor.amount"].exists)
+
+        typeAmount(app, expression: "94.00")
+        XCTAssertTrue(amountLabel.label.contains("94.00"))
+        let shortAmountInputHeight = inputCard.frame.height
+        typeAmount(app, expression: "+86")
+        XCTAssertTrue(amountLabel.label.contains("94.00+86"))
+        XCTAssertEqual(inputCard.frame.height, shortAmountInputHeight, accuracy: 1)
+
         let customKeypadInputHeight = inputCard.frame.height
         inputCard.coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.5)).tap()
 

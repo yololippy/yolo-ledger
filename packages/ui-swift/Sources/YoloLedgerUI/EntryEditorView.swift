@@ -226,7 +226,11 @@ struct EntryEditorView: View {
         }
         .padding(.horizontal, 11)
         .padding(.vertical, inputCardVerticalPadding)
+        #if os(iOS)
+        .frame(height: inputCardHeight)
+        #else
         .fixedSize(horizontal: false, vertical: true)
+        #endif
         .paperCard()
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("editor.input-card")
@@ -254,6 +258,10 @@ struct EntryEditorView: View {
         13
         #endif
     }
+
+    #if os(iOS)
+    private var inputCardHeight: CGFloat { 57 }
+    #endif
 
     private var keypadBottomPadding: CGFloat {
         #if os(iOS)
