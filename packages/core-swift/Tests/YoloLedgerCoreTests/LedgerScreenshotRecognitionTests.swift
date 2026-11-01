@@ -164,6 +164,84 @@ struct LedgerScreenshotRecognitionTests {
         #expect(proposal.amountMinorUnits == 5_500)
     }
 
+    @Test func promotionBelowAmountDoesNotReplaceMerchantAboveAmount() {
+        let proposal = LedgerScreenshotParser.parse(lines: [
+            .init(text: "支付成功", confidence: 0.3, height: 0.022),
+            .init(text: "咔叽农场", confidence: 0.5, height: 0.021),
+            .init(text: "¥58.00", confidence: 0.5, height: 0.054),
+            .init(text: "摇一摇有优惠", confidence: 0.5, height: 0.022),
+            .init(text: "查看", confidence: 0.5, height: 0.020),
+            .init(text: "中国银行立减金", confidence: 1, height: 0.019),
+            .init(text: "完成", confidence: 1, height: 0.020),
+        ])
+
+        #expect(proposal.amountMinorUnits == 5_800)
+        #expect(proposal.kind == .expense)
+        #expect(proposal.merchant == "咔叽农场")
+        #expect(proposal.suggestedCategoryName == "餐饮")
+    }
+
+    @Test func splitFinalAmountLabelBeatsProductPriceAndDiscount() {
+        let proposal = LedgerScreenshotParser.parse(lines: [
+            .init(text: "商品总价 ¥259.00"),
+            .init(text: "平台优惠 -¥67.81"),
+            .init(text: "实付款"),
+            .init(text: "¥145.19"),
+        ])
+
+        #expect(proposal.amountMinorUnits == 14_519)
+    }
+
+    @Test func splitMerchantLabelBeatsNearbyButtonsAndAdvertising() {
+        let proposal = LedgerScreenshotParser.parse(lines: [
+            .init(text: "支付成功"),
+            .init(text: "商户单号"),
+            .init(text: "商户全称"),
+            .init(text: "山野面馆"),
+            .init(text: "¥36.00", height: 0.05),
+            .init(text: "活动专区"),
+            .init(text: "立即查看"),
+            .init(text: "广告"),
+        ])
+
+        #expect(proposal.merchant == "山野面馆")
+        #expect(proposal.suggestedCategoryName == "餐饮")
+    }
+
+    @Test func buttonAndAdCopyAreExcludedFromMerchantFallback() {
+        let proposal = LedgerScreenshotParser.parse(lines: [
+            .init(text: "哆哆网咖", confidence: 0.5, height: 0.02),
+            .init(text: "-39.22", confidence: 0.5, height: 0.04),
+            .init(text: "福利中心", confidence: 1, height: 0.04),
+            .init(text: "立即购买", confidence: 1, height: 0.04),
+            .init(text: "被博主疯狂种草", confidence: 1, height: 0.04),
+        ])
+
+        #expect(proposal.merchant == "哆哆网咖")
+        #expect(proposal.suggestedCategoryName == "其它")
+
+        let adOnlyProposal = LedgerScreenshotParser.parse(lines: [
+            .init(text: "¥35.60", height: 0.04),
+            .init(text: "活动专区", confidence: 1, height: 0.04),
+            .init(text: "福利中心", confidence: 1, height: 0.04),
+            .init(text: "立即购买", confidence: 1, height: 0.04),
+            .init(text: "被博主疯狂种草", confidence: 1, height: 0.04),
+        ])
+        #expect(adOnlyProposal.merchant == nil)
+    }
+
+    @Test func statusBarTimeWithoutTransactionDateRemainsNil() {
+        let proposal = LedgerScreenshotParser.parse(lines: [
+            .init(text: "09:26"),
+            .init(text: "支付成功"),
+            .init(text: "咔叽农场"),
+            .init(text: "¥58.00"),
+            .init(text: "订单号 202611010001234567"),
+        ])
+
+        #expect(proposal.transactionDate == nil)
+    }
+
     @Test func proposalRoundTripsForPendingShortcutStorage() throws {
         let proposal = LedgerScreenshotParser.parse(lines: [.init(text: "实付 ¥12.34")])
         let data = try JSONEncoder().encode(proposal)

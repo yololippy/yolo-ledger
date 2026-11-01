@@ -102,6 +102,17 @@ struct LedgerScreenshotVisionFixtureTests {
         #expect(result.transactionDate == nil)
     }
 
+    @Test func kajiFarmOriginalImageKeepsMerchantAbovePromotionalCopy() throws {
+        let result = try recognize("kaji-farm-5800")
+
+        #expect(result.amountMinorUnits == 5_800)
+        #expect(result.kind == .expense)
+        #expect(result.suggestedCategoryName == "餐饮")
+        #expect(result.merchant == "咔叽农场")
+        #expect(result.recognizedText.contains("摇一摇有优惠"))
+        #expect(result.recognizedText.contains("中国银行立减金"))
+    }
+
     private func recognize(_ resourceName: String) throws -> LedgerScreenshotProposal {
         let url = try #require(Bundle.module.url(
             forResource: resourceName,
