@@ -67,7 +67,7 @@ struct LedgerMeowImportStorageTests {
 
         let current = try LocalLedgerStore.makeContainer(at: directory.storeURL)
         let record = try #require(ModelContext(current)
-            .fetch(FetchDescriptor<LedgerSchemaV2.EntryRecord>())
+            .fetch(FetchDescriptor<LedgerSchemaV3.EntryRecord>())
             .first { $0.id == entryID })
         #expect(record.importDeduplicationKey == nil)
         #expect(FileManager.default.fileExists(atPath: StoreUpgradeSnapshot.snapshotStoreURL(
@@ -243,7 +243,7 @@ struct LedgerMeowImportStorageTests {
         #expect(importedB.importMetadata == importedA.importMetadata)
         #expect(importedB.source == .meowLedgerImport)
         let raw = try ModelContext(LocalLedgerStore.makeContainer(at: directory.storeBURL))
-            .fetch(FetchDescriptor<LedgerSchemaV2.EntryRecord>())
+            .fetch(FetchDescriptor<LedgerSchemaV3.EntryRecord>())
         let record = try #require(raw.first { $0.id == importedA.id })
         #expect(record.importOriginalAccount == "现金账户")
         #expect(record.importOriginalCurrency == "HKD")
@@ -292,8 +292,8 @@ private func meowManualDraft(note: String) -> LedgerEntryDraft {
 }
 
 @MainActor
-private func readV2Entries(from storeURL: URL) throws -> [LedgerSchemaV2.EntryRecord] {
-    let schema = Schema(versionedSchema: LedgerSchemaV2.self)
+private func readV2Entries(from storeURL: URL) throws -> [LedgerSchemaV3.EntryRecord] {
+    let schema = Schema(versionedSchema: LedgerSchemaV3.self)
     let container = try ModelContainer(
         for: schema,
         configurations: [ModelConfiguration(
@@ -304,5 +304,5 @@ private func readV2Entries(from storeURL: URL) throws -> [LedgerSchemaV2.EntryRe
             cloudKitDatabase: .none
         )]
     )
-    return try ModelContext(container).fetch(FetchDescriptor<LedgerSchemaV2.EntryRecord>())
+    return try ModelContext(container).fetch(FetchDescriptor<LedgerSchemaV3.EntryRecord>())
 }

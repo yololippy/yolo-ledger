@@ -15,15 +15,15 @@ enum LedgerSeedBootstrap {
         do {
             if try !hasMarker(choicesV1Key, in: context) {
                 try initializeChoices(in: context)
-                context.insert(LedgerSchemaV2.StoreMetadata(key: choicesV1Key))
+                context.insert(LedgerSchemaV3.StoreMetadata(key: choicesV1Key))
             }
             if try !hasMarker(categoriesV2Key, in: context) {
                 try upgradeCategories(in: context)
-                context.insert(LedgerSchemaV2.StoreMetadata(key: categoriesV2Key))
+                context.insert(LedgerSchemaV3.StoreMetadata(key: categoriesV2Key))
             }
             if try !hasMarker(defaultBookV3Key, in: context) {
                 try upgradeDefaultBook(in: context)
-                context.insert(LedgerSchemaV2.StoreMetadata(key: defaultBookV3Key))
+                context.insert(LedgerSchemaV3.StoreMetadata(key: defaultBookV3Key))
             }
             // Keep data and revision markers in one commit; reopening a current store is read-only.
             if context.hasChanges { try context.save() }
@@ -34,15 +34,15 @@ enum LedgerSeedBootstrap {
     }
 
     private static func hasMarker(_ key: String, in context: ModelContext) throws -> Bool {
-        var descriptor = FetchDescriptor<LedgerSchemaV2.StoreMetadata>(predicate: #Predicate { $0.key == key })
+        var descriptor = FetchDescriptor<LedgerSchemaV3.StoreMetadata>(predicate: #Predicate { $0.key == key })
         descriptor.fetchLimit = 1
         return try !context.fetch(descriptor).isEmpty
     }
 
     private static func initializeChoices(in context: ModelContext) throws {
-        let bookIDs = Set(try context.fetch(FetchDescriptor<LedgerSchemaV2.BookRecord>()).map(\.id))
+        let bookIDs = Set(try context.fetch(FetchDescriptor<LedgerSchemaV3.BookRecord>()).map(\.id))
         for (order, book) in LedgerSeedData.books.enumerated() where !bookIDs.contains(book.id) {
-            context.insert(LedgerSchemaV2.BookRecord(
+            context.insert(LedgerSchemaV3.BookRecord(
                 id: book.id,
                 name: book.name,
                 sortOrder: order,
@@ -50,9 +50,9 @@ enum LedgerSeedBootstrap {
                 updatedAt: seedTimestamp
             ))
         }
-        let categoryIDs = Set(try context.fetch(FetchDescriptor<LedgerSchemaV2.CategoryRecord>()).map(\.id))
+        let categoryIDs = Set(try context.fetch(FetchDescriptor<LedgerSchemaV3.CategoryRecord>()).map(\.id))
         for (order, category) in LedgerSeedData.categories.enumerated() where !categoryIDs.contains(category.id) {
-            context.insert(LedgerSchemaV2.CategoryRecord(
+            context.insert(LedgerSchemaV3.CategoryRecord(
                 id: category.id,
                 name: category.name,
                 kindRawValue: category.kind.rawValue,
@@ -65,7 +65,7 @@ enum LedgerSeedBootstrap {
 
     private static func upgradeCategories(in context: ModelContext) throws {
         let upgradeTimestamp = Date()
-        let records = try context.fetch(FetchDescriptor<LedgerSchemaV2.CategoryRecord>())
+        let records = try context.fetch(FetchDescriptor<LedgerSchemaV3.CategoryRecord>())
         let recordsByID = Dictionary(uniqueKeysWithValues: records.map { ($0.id, $0) })
         for (order, category) in LedgerSeedData.categories.enumerated() {
             if let existing = recordsByID[category.id] {
@@ -77,7 +77,7 @@ enum LedgerSeedBootstrap {
                 }
                 if changed { existing.updatedAt = max(existing.updatedAt, upgradeTimestamp) }
             } else {
-                context.insert(LedgerSchemaV2.CategoryRecord(
+                context.insert(LedgerSchemaV3.CategoryRecord(
                     id: category.id,
                     name: category.name,
                     kindRawValue: category.kind.rawValue,
@@ -93,7 +93,7 @@ enum LedgerSeedBootstrap {
     /// has the new name, its entries are moved atomically before the duplicate is tombstoned.
     /// A user-renamed seed book is left untouched.
     private static func upgradeDefaultBook(in context: ModelContext) throws {
-        let books = try context.fetch(FetchDescriptor<LedgerSchemaV2.BookRecord>())
+        let books = try context.fetch(FetchDescriptor<LedgerSchemaV3.BookRecord>())
         guard let seed = books.first(where: {
             $0.id == LedgerSeedData.defaultBook.id && $0.deletedAt == nil
         }) else { return }
@@ -109,7 +109,7 @@ enum LedgerSeedBootstrap {
         }
         if !duplicates.isEmpty {
             let duplicateIDs = Set(duplicates.map(\.id))
-            let entries = try context.fetch(FetchDescriptor<LedgerSchemaV2.EntryRecord>())
+            let entries = try context.fetch(FetchDescriptor<LedgerSchemaV3.EntryRecord>())
             for entry in entries where duplicateIDs.contains(entry.bookID) {
                 entry.bookID = seed.id
                 entry.updatedAt = max(entry.updatedAt, now)

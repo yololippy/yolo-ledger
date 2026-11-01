@@ -3,7 +3,7 @@ import SwiftData
 import YoloLedgerCore
 
 /// A local, disk-backed repository. Create one instance per active app store.
-public struct SwiftDataLedgerRepository: LedgerRepository, LedgerFolderSyncing {
+public struct SwiftDataLedgerRepository: LedgerRepository, LedgerFolderSyncing, LedgerScheduledEntryRepository {
     public let storeURL: URL
     private let store: LedgerStoreActor
     private let syncMonitor: CloudSyncMonitor
@@ -112,9 +112,74 @@ public struct SwiftDataLedgerRepository: LedgerRepository, LedgerFolderSyncing {
             try await repository.importMeowLedger(plans: plans)
         }
     }
+
+    public func fetchScheduledEntryRules() async throws -> [LedgerScheduledEntryRule] {
+        try await store.fetchScheduledEntryRules()
+    }
+
+    @discardableResult
+    public func saveScheduledEntryRuleVersion(
+        _ rule: LedgerScheduledEntryRule
+    ) async throws -> LedgerScheduledEntryRule {
+        try await store.saveScheduledEntryRuleVersion(rule)
+    }
+
+    @discardableResult
+    public func pauseScheduledEntryRule(
+        id: UUID,
+        effectiveMonth: LedgerYearMonth,
+        updatedAt: Date
+    ) async throws -> LedgerScheduledEntryRule {
+        try await store.pauseScheduledEntryRule(
+            id: id,
+            effectiveMonth: effectiveMonth,
+            updatedAt: updatedAt
+        )
+    }
+
+    @discardableResult
+    public func resumeScheduledEntryRule(
+        id: UUID,
+        effectiveStartMonth: LedgerYearMonth,
+        updatedAt: Date
+    ) async throws -> LedgerScheduledEntryRule {
+        try await store.resumeScheduledEntryRule(
+            id: id,
+            effectiveStartMonth: effectiveStartMonth,
+            updatedAt: updatedAt
+        )
+    }
+
+    public func deleteScheduledEntryRule(id: UUID, deletedAt: Date) async throws {
+        try await store.deleteScheduledEntryRule(id: id, deletedAt: deletedAt)
+    }
+
+    public func processDueScheduledEntries(
+        now: Date,
+        calendar: Calendar,
+        timeZone: TimeZone
+    ) async throws -> LedgerScheduledProcessingResult {
+        try await store.processDueScheduledEntries(
+            now: now,
+            calendar: calendar,
+            timeZone: timeZone
+        )
+    }
+
+    public func nextScheduledEntryDate(
+        after now: Date,
+        calendar: Calendar,
+        timeZone: TimeZone
+    ) async throws -> Date? {
+        try await store.nextScheduledEntryDate(
+            after: now,
+            calendar: calendar,
+            timeZone: timeZone
+        )
+    }
 }
 
-private actor LedgerStoreActor: ModelActor {
+actor LedgerStoreActor: ModelActor {
     nonisolated let modelExecutor: any ModelExecutor
     nonisolated let modelContainer: ModelContainer
     nonisolated let storeURL: URL
@@ -135,7 +200,7 @@ private actor LedgerStoreActor: ModelActor {
     }
 
     private func activeBooks() throws -> [LedgerBook] {
-        try modelContext.fetch(FetchDescriptor<LedgerSchemaV2.BookRecord>(
+        try modelContext.fetch(FetchDescriptor<LedgerSchemaV3.BookRecord>(
             predicate: #Predicate { $0.deletedAt == nil }
         ))
             .sorted { left, right in
@@ -151,7 +216,7 @@ private actor LedgerStoreActor: ModelActor {
     }
 
     private func activeCategories() throws -> [LedgerCategory] {
-        try modelContext.fetch(FetchDescriptor<LedgerSchemaV2.CategoryRecord>(
+        try modelContext.fetch(FetchDescriptor<LedgerSchemaV3.CategoryRecord>(
             predicate: #Predicate { $0.deletedAt == nil }
         ))
             .sorted { left, right in
@@ -173,7 +238,7 @@ private actor LedgerStoreActor: ModelActor {
         try reconcileDuplicates()
         let books = try activeBooks()
         let categories = try activeCategories()
-        var descriptor = FetchDescriptor<LedgerSchemaV2.EntryRecord>(
+        var descriptor = FetchDescriptor<LedgerSchemaV3.EntryRecord>(
             predicate: #Predicate { $0.deletedAt == nil }
         )
         if let selectedID = bookID {
@@ -203,7 +268,7 @@ private actor LedgerStoreActor: ModelActor {
         let categories = try activeCategories()
         let rangeStart = dateRange.start
         let rangeEnd = dateRange.end
-        let descriptor = FetchDescriptor<LedgerSchemaV2.EntryRecord>(
+        let descriptor = FetchDescriptor<LedgerSchemaV3.EntryRecord>(
             predicate: #Predicate {
                 $0.bookID == bookID
                     && $0.occurredAt >= rangeStart
@@ -230,7 +295,7 @@ private actor LedgerStoreActor: ModelActor {
 
     func fetchRecentNotes(categoryID: UUID, limit: Int) throws -> [String] {
         guard limit > 0 else { return [] }
-        let descriptor = FetchDescriptor<LedgerSchemaV2.EntryRecord>(
+        let descriptor = FetchDescriptor<LedgerSchemaV3.EntryRecord>(
             predicate: #Predicate { $0.categoryID == categoryID && $0.deletedAt == nil },
             sortBy: [
                 SortDescriptor(\.updatedAt),
@@ -259,9 +324,11 @@ private actor LedgerStoreActor: ModelActor {
         }
         try validate(draft)
         try Self.validateImportMetadata(draft)
+        try Self.validateScheduledMetadata(draft)
         let now = Date()
         let importMetadata = draft.importMetadata
-        let record = LedgerSchemaV2.EntryRecord(
+        let scheduledOccurrence = draft.scheduledOccurrence
+        let record = LedgerSchemaV3.EntryRecord(
             id: id,
             bookID: draft.bookID,
             categoryID: draft.categoryID,
@@ -279,6 +346,10 @@ private actor LedgerStoreActor: ModelActor {
             importOriginalBook: importMetadata?.originalBook,
             importOriginalCurrency: importMetadata?.originalCurrency,
             importOriginalNote: importMetadata?.originalNote,
+            scheduledRuleID: scheduledOccurrence?.ruleID,
+            scheduledYear: scheduledOccurrence?.month.year,
+            scheduledMonth: scheduledOccurrence?.month.month,
+            scheduledOccurrenceKey: scheduledOccurrence?.occurrenceKey,
             createdAt: now,
             updatedAt: now
         )
@@ -317,14 +388,14 @@ private actor LedgerStoreActor: ModelActor {
         guard try findBook(id: id, includesDeleted: true) == nil else {
             throw LedgerError.duplicateIdentifier(id)
         }
-        let records = try modelContext.fetch(FetchDescriptor<LedgerSchemaV2.BookRecord>(
+        let records = try modelContext.fetch(FetchDescriptor<LedgerSchemaV3.BookRecord>(
             predicate: #Predicate { $0.deletedAt == nil }
         ))
         let (order, overflow) = (records.map(\.sortOrder).max() ?? -1).addingReportingOverflow(1)
         guard !overflow else {
             throw LedgerStorageError.invalidStoredValue(entity: "账本", field: "排序")
         }
-        let record = LedgerSchemaV2.BookRecord(id: id, name: normalizedName, sortOrder: order)
+        let record = LedgerSchemaV3.BookRecord(id: id, name: normalizedName, sortOrder: order)
         return try save {
             modelContext.insert(record)
             return LedgerBook(id: record.id, name: record.name)
@@ -348,11 +419,11 @@ private actor LedgerStoreActor: ModelActor {
     ) throws -> LedgerMeowImportBatchReport {
         let preparation = try LedgerMeowImportPlanValidator.prepare(plans)
         do {
-            let allBooks = try modelContext.fetch(FetchDescriptor<LedgerSchemaV2.BookRecord>())
-            let allCategories = try modelContext.fetch(FetchDescriptor<LedgerSchemaV2.CategoryRecord>())
-            let allEntries = try modelContext.fetch(FetchDescriptor<LedgerSchemaV2.EntryRecord>())
+            let allBooks = try modelContext.fetch(FetchDescriptor<LedgerSchemaV3.BookRecord>())
+            let allCategories = try modelContext.fetch(FetchDescriptor<LedgerSchemaV3.CategoryRecord>())
+            let allEntries = try modelContext.fetch(FetchDescriptor<LedgerSchemaV3.EntryRecord>())
 
-            var existingEntriesByDeduplicationKey: [String: [LedgerSchemaV2.EntryRecord]] = [:]
+            var existingEntriesByDeduplicationKey: [String: [LedgerSchemaV3.EntryRecord]] = [:]
             for entry in allEntries {
                 if let key = entry.importDeduplicationKey {
                     existingEntriesByDeduplicationKey[key, default: []].append(entry)
@@ -460,7 +531,7 @@ private actor LedgerStoreActor: ModelActor {
                 createdAt: startedAt
             )
             for book in plannedBooks {
-                modelContext.insert(LedgerSchemaV2.BookRecord(
+                modelContext.insert(LedgerSchemaV3.BookRecord(
                     id: book.id,
                     name: book.name,
                     sortOrder: book.sortOrder,
@@ -469,7 +540,7 @@ private actor LedgerStoreActor: ModelActor {
                 ))
             }
             for category in plannedCategories {
-                modelContext.insert(LedgerSchemaV2.CategoryRecord(
+                modelContext.insert(LedgerSchemaV3.CategoryRecord(
                     id: category.id,
                     name: category.key.name,
                     kindRawValue: category.key.kind.rawValue,
@@ -492,7 +563,7 @@ private actor LedgerStoreActor: ModelActor {
                         reason: "账本或分类映射失败"
                     )
                 }
-                modelContext.insert(LedgerSchemaV2.EntryRecord(
+                modelContext.insert(LedgerSchemaV3.EntryRecord(
                     id: prepared.entryID,
                     bookID: bookID,
                     categoryID: categoryID,
@@ -539,7 +610,7 @@ private actor LedgerStoreActor: ModelActor {
     }
 
     private static func matches(
-        _ stored: LedgerSchemaV2.EntryRecord,
+        _ stored: LedgerSchemaV3.EntryRecord,
         importedRecord: LedgerMeowImportRecord
     ) -> Bool {
         let metadata = importedRecord.importMetadata
@@ -585,9 +656,9 @@ private actor LedgerStoreActor: ModelActor {
         generatedAt: Date
     ) throws -> LedgerFolderMergeResult {
         do {
-            let allBooks = try modelContext.fetch(FetchDescriptor<LedgerSchemaV2.BookRecord>())
-            let allCategories = try modelContext.fetch(FetchDescriptor<LedgerSchemaV2.CategoryRecord>())
-            let allEntries = try modelContext.fetch(FetchDescriptor<LedgerSchemaV2.EntryRecord>())
+            let allBooks = try modelContext.fetch(FetchDescriptor<LedgerSchemaV3.BookRecord>())
+            let allCategories = try modelContext.fetch(FetchDescriptor<LedgerSchemaV3.CategoryRecord>())
+            let allEntries = try modelContext.fetch(FetchDescriptor<LedgerSchemaV3.EntryRecord>())
 
             let bookRecords = canonicalRecords(allBooks, preferredBy: Self.preferredBook)
             let categoryRecords = canonicalRecords(allCategories, preferredBy: Self.preferredCategory)
@@ -620,7 +691,7 @@ private actor LedgerStoreActor: ModelActor {
                     candidate.record.apply(to: record)
                 } else {
                     let value = candidate.record
-                    modelContext.insert(LedgerSchemaV2.BookRecord(
+                    modelContext.insert(LedgerSchemaV3.BookRecord(
                         id: value.id,
                         name: value.name,
                         sortOrder: value.sortOrder,
@@ -637,7 +708,7 @@ private actor LedgerStoreActor: ModelActor {
                     candidate.record.apply(to: record)
                 } else {
                     let value = candidate.record
-                    modelContext.insert(LedgerSchemaV2.CategoryRecord(
+                    modelContext.insert(LedgerSchemaV3.CategoryRecord(
                         id: value.id,
                         name: value.name,
                         kindRawValue: value.kindRawValue,
@@ -655,7 +726,7 @@ private actor LedgerStoreActor: ModelActor {
                     candidate.record.apply(to: record)
                 } else {
                     let value = candidate.record
-                    modelContext.insert(LedgerSchemaV2.EntryRecord(
+                    modelContext.insert(LedgerSchemaV3.EntryRecord(
                         id: value.id,
                         bookID: value.bookID,
                         categoryID: value.categoryID,
@@ -673,6 +744,10 @@ private actor LedgerStoreActor: ModelActor {
                         importOriginalBook: value.importOriginalBook,
                         importOriginalCurrency: value.importOriginalCurrency,
                         importOriginalNote: value.importOriginalNote,
+                        scheduledRuleID: value.scheduledRuleID,
+                        scheduledYear: value.scheduledYear,
+                        scheduledMonth: value.scheduledMonth,
+                        scheduledOccurrenceKey: value.scheduledOccurrenceKey,
                         createdAt: value.createdAt,
                         updatedAt: value.updatedAt,
                         deletedAt: value.deletedAt
@@ -722,9 +797,9 @@ private actor LedgerStoreActor: ModelActor {
 
     private func recordID<Record: PersistentModel>(_ record: Record) -> UUID {
         switch record {
-        case let book as LedgerSchemaV2.BookRecord: book.id
-        case let category as LedgerSchemaV2.CategoryRecord: category.id
-        case let entry as LedgerSchemaV2.EntryRecord: entry.id
+        case let book as LedgerSchemaV3.BookRecord: book.id
+        case let category as LedgerSchemaV3.CategoryRecord: category.id
+        case let entry as LedgerSchemaV3.EntryRecord: entry.id
         default: preconditionFailure("Unsupported ledger record type")
         }
     }
@@ -792,8 +867,8 @@ private actor LedgerStoreActor: ModelActor {
     private func findEntry(
         id: UUID,
         includesDeleted: Bool = false
-    ) throws -> LedgerSchemaV2.EntryRecord? {
-        var descriptor = FetchDescriptor<LedgerSchemaV2.EntryRecord>()
+    ) throws -> LedgerSchemaV3.EntryRecord? {
+        var descriptor = FetchDescriptor<LedgerSchemaV3.EntryRecord>()
         descriptor.predicate = includesDeleted
             ? #Predicate { $0.id == id }
             : #Predicate { $0.id == id && $0.deletedAt == nil }
@@ -804,8 +879,8 @@ private actor LedgerStoreActor: ModelActor {
     private func findBook(
         id: UUID,
         includesDeleted: Bool = false
-    ) throws -> LedgerSchemaV2.BookRecord? {
-        var descriptor = FetchDescriptor<LedgerSchemaV2.BookRecord>()
+    ) throws -> LedgerSchemaV3.BookRecord? {
+        var descriptor = FetchDescriptor<LedgerSchemaV3.BookRecord>()
         descriptor.predicate = includesDeleted
             ? #Predicate { $0.id == id }
             : #Predicate { $0.id == id && $0.deletedAt == nil }
@@ -814,25 +889,25 @@ private actor LedgerStoreActor: ModelActor {
     }
 
     private static func reconcileDuplicates(in context: ModelContext) throws {
-        let books = try context.fetch(FetchDescriptor<LedgerSchemaV2.BookRecord>())
+        let books = try context.fetch(FetchDescriptor<LedgerSchemaV3.BookRecord>())
         for duplicates in Dictionary(grouping: books, by: \.id).values where duplicates.count > 1 {
             let ordered = duplicates.sorted(by: preferredBook)
             for record in ordered.dropFirst() { context.delete(record) }
         }
 
-        let categories = try context.fetch(FetchDescriptor<LedgerSchemaV2.CategoryRecord>())
+        let categories = try context.fetch(FetchDescriptor<LedgerSchemaV3.CategoryRecord>())
         for duplicates in Dictionary(grouping: categories, by: \.id).values where duplicates.count > 1 {
             let ordered = duplicates.sorted(by: preferredCategory)
             for record in ordered.dropFirst() { context.delete(record) }
         }
 
-        let entries = try context.fetch(FetchDescriptor<LedgerSchemaV2.EntryRecord>())
+        let entries = try context.fetch(FetchDescriptor<LedgerSchemaV3.EntryRecord>())
         for duplicates in Dictionary(grouping: entries, by: \.id).values where duplicates.count > 1 {
             let ordered = duplicates.sorted(by: preferredEntry)
             for record in ordered.dropFirst() { context.delete(record) }
         }
 
-        let metadata = try context.fetch(FetchDescriptor<LedgerSchemaV2.StoreMetadata>())
+        let metadata = try context.fetch(FetchDescriptor<LedgerSchemaV3.StoreMetadata>())
         for duplicates in Dictionary(grouping: metadata, by: \.key).values where duplicates.count > 1 {
             let ordered = duplicates.sorted {
                 String(describing: $0.persistentModelID) < String(describing: $1.persistentModelID)
@@ -850,17 +925,17 @@ private actor LedgerStoreActor: ModelActor {
     /// Seed upgrades only require unique books, categories and metadata. Entries are omitted
     /// here so opening a large current store does not perform a full history scan.
     private static func reconcileBootstrapRecords(in context: ModelContext) throws {
-        let books = try context.fetch(FetchDescriptor<LedgerSchemaV2.BookRecord>())
+        let books = try context.fetch(FetchDescriptor<LedgerSchemaV3.BookRecord>())
         for duplicates in Dictionary(grouping: books, by: \.id).values where duplicates.count > 1 {
             let ordered = duplicates.sorted(by: preferredBook)
             for record in ordered.dropFirst() { context.delete(record) }
         }
-        let categories = try context.fetch(FetchDescriptor<LedgerSchemaV2.CategoryRecord>())
+        let categories = try context.fetch(FetchDescriptor<LedgerSchemaV3.CategoryRecord>())
         for duplicates in Dictionary(grouping: categories, by: \.id).values where duplicates.count > 1 {
             let ordered = duplicates.sorted(by: preferredCategory)
             for record in ordered.dropFirst() { context.delete(record) }
         }
-        let metadata = try context.fetch(FetchDescriptor<LedgerSchemaV2.StoreMetadata>())
+        let metadata = try context.fetch(FetchDescriptor<LedgerSchemaV3.StoreMetadata>())
         for duplicates in Dictionary(grouping: metadata, by: \.key).values where duplicates.count > 1 {
             let ordered = duplicates.sorted {
                 String(describing: $0.persistentModelID) < String(describing: $1.persistentModelID)
@@ -871,8 +946,8 @@ private actor LedgerStoreActor: ModelActor {
     }
 
     private static func preferredBook(
-        _ left: LedgerSchemaV2.BookRecord,
-        _ right: LedgerSchemaV2.BookRecord
+        _ left: LedgerSchemaV3.BookRecord,
+        _ right: LedgerSchemaV3.BookRecord
     ) -> Bool {
         let leftDate = max(left.updatedAt, left.deletedAt ?? .distantPast)
         let rightDate = max(right.updatedAt, right.deletedAt ?? .distantPast)
@@ -884,8 +959,8 @@ private actor LedgerStoreActor: ModelActor {
     }
 
     private static func preferredCategory(
-        _ left: LedgerSchemaV2.CategoryRecord,
-        _ right: LedgerSchemaV2.CategoryRecord
+        _ left: LedgerSchemaV3.CategoryRecord,
+        _ right: LedgerSchemaV3.CategoryRecord
     ) -> Bool {
         let leftDate = max(left.updatedAt, left.deletedAt ?? .distantPast)
         let rightDate = max(right.updatedAt, right.deletedAt ?? .distantPast)
@@ -898,8 +973,8 @@ private actor LedgerStoreActor: ModelActor {
     }
 
     private static func preferredEntry(
-        _ left: LedgerSchemaV2.EntryRecord,
-        _ right: LedgerSchemaV2.EntryRecord
+        _ left: LedgerSchemaV3.EntryRecord,
+        _ right: LedgerSchemaV3.EntryRecord
     ) -> Bool {
         let leftDate = max(left.updatedAt, left.deletedAt ?? .distantPast)
         let rightDate = max(right.updatedAt, right.deletedAt ?? .distantPast)
@@ -924,7 +999,7 @@ private actor LedgerStoreActor: ModelActor {
     }
 
     private static func importMetadataSortValues(
-        _ record: LedgerSchemaV2.EntryRecord
+        _ record: LedgerSchemaV3.EntryRecord
     ) -> [String] {
         [
             record.importFormatRawValue,
@@ -936,6 +1011,10 @@ private actor LedgerStoreActor: ModelActor {
             record.importOriginalBook,
             record.importOriginalCurrency,
             record.importOriginalNote,
+            record.scheduledRuleID?.uuidString,
+            record.scheduledYear.map(String.init),
+            record.scheduledMonth.map(String.init),
+            record.scheduledOccurrenceKey,
         ].map { $0 ?? "" }
     }
 
@@ -950,13 +1029,14 @@ private actor LedgerStoreActor: ModelActor {
         }
     }
 
-    private static func entry(from record: LedgerSchemaV2.EntryRecord) throws -> LedgerEntry {
+    private static func entry(from record: LedgerSchemaV3.EntryRecord) throws -> LedgerEntry {
         guard let kind = LedgerEntryKind(rawValue: record.kindRawValue),
               let source = LedgerEntrySource(rawValue: record.sourceRawValue),
               record.createdAt.timeIntervalSinceReferenceDate.isFinite,
               record.updatedAt.timeIntervalSinceReferenceDate.isFinite
         else { throw LedgerStorageError.invalidStoredValue(entity: "账目", field: "来源、类型或时间") }
         let importMetadata = try importMetadata(from: record)
+        let scheduledOccurrence = try scheduledOccurrence(from: record)
         let draft = LedgerEntryDraft(
             bookID: record.bookID,
             categoryID: record.categoryID,
@@ -965,7 +1045,8 @@ private actor LedgerStoreActor: ModelActor {
             date: record.occurredAt,
             note: record.note,
             source: source,
-            importMetadata: importMetadata
+            importMetadata: importMetadata,
+            scheduledOccurrence: scheduledOccurrence
         )
         return LedgerEntry(id: record.id, draft: draft, createdAt: record.createdAt, updatedAt: record.updatedAt)
     }
@@ -984,8 +1065,23 @@ private actor LedgerStoreActor: ModelActor {
         }
     }
 
+    private static func validateScheduledMetadata(_ draft: LedgerEntryDraft) throws {
+        guard let occurrence = draft.scheduledOccurrence else {
+            guard draft.source != .scheduled else {
+                throw LedgerStorageError.invalidStoredValue(entity: "账目", field: "定时 occurrence")
+            }
+            return
+        }
+        guard draft.source == .scheduled,
+              draft.importMetadata == nil,
+              !occurrence.occurrenceKey.isEmpty
+        else {
+            throw LedgerStorageError.invalidStoredValue(entity: "账目", field: "定时 occurrence")
+        }
+    }
+
     private static func importMetadata(
-        from record: LedgerSchemaV2.EntryRecord
+        from record: LedgerSchemaV3.EntryRecord
     ) throws -> LedgerEntryImportMetadata? {
         let values = [
             record.importFormatRawValue,
@@ -1031,5 +1127,38 @@ private actor LedgerStoreActor: ModelActor {
             originalCurrency: originalCurrency,
             originalNote: originalNote
         )
+    }
+
+    private static func scheduledOccurrence(
+        from record: LedgerSchemaV3.EntryRecord
+    ) throws -> LedgerScheduledOccurrenceMetadata? {
+        let valuesPresent = [
+            record.scheduledRuleID != nil,
+            record.scheduledYear != nil,
+            record.scheduledMonth != nil,
+            record.scheduledOccurrenceKey != nil,
+        ]
+        if valuesPresent.allSatisfy({ !$0 }) {
+            guard record.sourceRawValue != LedgerEntrySource.scheduled.rawValue else {
+                throw LedgerStorageError.invalidStoredValue(entity: "账目", field: "定时 occurrence")
+            }
+            return nil
+        }
+        guard valuesPresent.allSatisfy({ $0 }),
+              record.sourceRawValue == LedgerEntrySource.scheduled.rawValue,
+              record.importFormatRawValue == nil,
+              let ruleID = record.scheduledRuleID,
+              let year = record.scheduledYear,
+              let month = record.scheduledMonth,
+              let occurrenceKey = record.scheduledOccurrenceKey,
+              let yearMonth = try? LedgerYearMonth(year: year, month: month)
+        else {
+            throw LedgerStorageError.invalidStoredValue(entity: "账目", field: "定时 occurrence")
+        }
+        let metadata = LedgerScheduledOccurrenceMetadata(ruleID: ruleID, month: yearMonth)
+        guard metadata.occurrenceKey == occurrenceKey else {
+            throw LedgerStorageError.invalidStoredValue(entity: "账目", field: "定时 occurrence")
+        }
+        return metadata
     }
 }

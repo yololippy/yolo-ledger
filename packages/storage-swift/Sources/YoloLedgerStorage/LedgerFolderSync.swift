@@ -26,8 +26,8 @@ public enum LedgerFolderSyncError: Error, Equatable, Sendable, LocalizedError {
 }
 
 struct LedgerFolderSnapshot: Codable, Equatable, Sendable {
-    static let currentFormatVersion = 2
-    static let supportedFormatVersions: Set<Int> = [1, currentFormatVersion]
+    static let currentFormatVersion = 3
+    static let supportedFormatVersions: Set<Int> = [1, 2, currentFormatVersion]
 
     let formatVersion: Int
     let schemaVersion: String
@@ -74,6 +74,10 @@ struct LedgerFolderSnapshot: Codable, Equatable, Sendable {
         let importOriginalBook: String?
         let importOriginalCurrency: String?
         let importOriginalNote: String?
+        let scheduledRuleID: UUID?
+        let scheduledYear: Int?
+        let scheduledMonth: Int?
+        let scheduledOccurrenceKey: String?
         let createdAt: Date
         let updatedAt: Date
         let deletedAt: Date?
@@ -96,6 +100,10 @@ struct LedgerFolderSnapshot: Codable, Equatable, Sendable {
             importOriginalBook: String? = nil,
             importOriginalCurrency: String? = nil,
             importOriginalNote: String? = nil,
+            scheduledRuleID: UUID? = nil,
+            scheduledYear: Int? = nil,
+            scheduledMonth: Int? = nil,
+            scheduledOccurrenceKey: String? = nil,
             createdAt: Date,
             updatedAt: Date,
             deletedAt: Date?
@@ -117,6 +125,10 @@ struct LedgerFolderSnapshot: Codable, Equatable, Sendable {
             self.importOriginalBook = importOriginalBook
             self.importOriginalCurrency = importOriginalCurrency
             self.importOriginalNote = importOriginalNote
+            self.scheduledRuleID = scheduledRuleID
+            self.scheduledYear = scheduledYear
+            self.scheduledMonth = scheduledMonth
+            self.scheduledOccurrenceKey = scheduledOccurrenceKey
             self.createdAt = createdAt
             self.updatedAt = updatedAt
             self.deletedAt = deletedAt
@@ -332,6 +344,7 @@ enum LedgerFolderSnapshotIO {
                 throw LedgerFolderSyncError.invalidSnapshot(file: file, reason: "账目与分类类型不一致")
             }
             try validateImportMetadata(record, file: file)
+            try validateScheduledMetadata(record, file: file)
         }
     }
 
@@ -359,6 +372,36 @@ enum LedgerFolderSnapshotIO {
               !key.isEmpty
         else {
             throw LedgerFolderSyncError.invalidSnapshot(file: file, reason: "账目导入元数据不完整")
+        }
+    }
+
+    private static func validateScheduledMetadata(
+        _ record: LedgerFolderSnapshot.Entry,
+        file: String
+    ) throws {
+        let valuesPresent = [
+            record.scheduledRuleID != nil,
+            record.scheduledYear != nil,
+            record.scheduledMonth != nil,
+            record.scheduledOccurrenceKey != nil,
+        ]
+        if valuesPresent.allSatisfy({ !$0 }) {
+            guard record.sourceRawValue != LedgerEntrySource.scheduled.rawValue else {
+                throw LedgerFolderSyncError.invalidSnapshot(file: file, reason: "定时 occurrence 元数据缺失")
+            }
+            return
+        }
+        guard valuesPresent.allSatisfy({ $0 }),
+              record.sourceRawValue == LedgerEntrySource.scheduled.rawValue,
+              record.importFormatRawValue == nil,
+              let ruleID = record.scheduledRuleID,
+              let year = record.scheduledYear,
+              let month = record.scheduledMonth,
+              let key = record.scheduledOccurrenceKey,
+              let yearMonth = try? LedgerYearMonth(year: year, month: month),
+              key == LedgerScheduledOccurrenceIdentity.key(ruleID: ruleID, month: yearMonth)
+        else {
+            throw LedgerFolderSyncError.invalidSnapshot(file: file, reason: "定时 occurrence 元数据无效")
         }
     }
 
@@ -492,7 +535,7 @@ protocol LedgerFolderVersionedRecord: Codable, Equatable, Sendable {
 }
 
 extension LedgerFolderSnapshot.Book: LedgerFolderVersionedRecord {
-    init(_ record: LedgerSchemaV2.BookRecord) {
+    init(_ record: LedgerSchemaV3.BookRecord) {
         self.init(
             id: record.id,
             name: record.name,
@@ -503,7 +546,7 @@ extension LedgerFolderSnapshot.Book: LedgerFolderVersionedRecord {
         )
     }
 
-    func apply(to record: LedgerSchemaV2.BookRecord) {
+    func apply(to record: LedgerSchemaV3.BookRecord) {
         record.name = name
         record.sortOrder = sortOrder
         record.createdAt = createdAt
@@ -513,7 +556,7 @@ extension LedgerFolderSnapshot.Book: LedgerFolderVersionedRecord {
 }
 
 extension LedgerFolderSnapshot.Category: LedgerFolderVersionedRecord {
-    init(_ record: LedgerSchemaV2.CategoryRecord) {
+    init(_ record: LedgerSchemaV3.CategoryRecord) {
         self.init(
             id: record.id,
             name: record.name,
@@ -525,7 +568,7 @@ extension LedgerFolderSnapshot.Category: LedgerFolderVersionedRecord {
         )
     }
 
-    func apply(to record: LedgerSchemaV2.CategoryRecord) {
+    func apply(to record: LedgerSchemaV3.CategoryRecord) {
         record.name = name
         record.kindRawValue = kindRawValue
         record.sortOrder = sortOrder
@@ -536,7 +579,7 @@ extension LedgerFolderSnapshot.Category: LedgerFolderVersionedRecord {
 }
 
 extension LedgerFolderSnapshot.Entry: LedgerFolderVersionedRecord {
-    init(_ record: LedgerSchemaV2.EntryRecord) {
+    init(_ record: LedgerSchemaV3.EntryRecord) {
         self.init(
             id: record.id,
             bookID: record.bookID,
@@ -555,13 +598,17 @@ extension LedgerFolderSnapshot.Entry: LedgerFolderVersionedRecord {
             importOriginalBook: record.importOriginalBook,
             importOriginalCurrency: record.importOriginalCurrency,
             importOriginalNote: record.importOriginalNote,
+            scheduledRuleID: record.scheduledRuleID,
+            scheduledYear: record.scheduledYear,
+            scheduledMonth: record.scheduledMonth,
+            scheduledOccurrenceKey: record.scheduledOccurrenceKey,
             createdAt: record.createdAt,
             updatedAt: record.updatedAt,
             deletedAt: record.deletedAt
         )
     }
 
-    func apply(to record: LedgerSchemaV2.EntryRecord) {
+    func apply(to record: LedgerSchemaV3.EntryRecord) {
         record.bookID = bookID
         record.categoryID = categoryID
         record.kindRawValue = kindRawValue
@@ -578,6 +625,10 @@ extension LedgerFolderSnapshot.Entry: LedgerFolderVersionedRecord {
         record.importOriginalBook = importOriginalBook
         record.importOriginalCurrency = importOriginalCurrency
         record.importOriginalNote = importOriginalNote
+        record.scheduledRuleID = scheduledRuleID
+        record.scheduledYear = scheduledYear
+        record.scheduledMonth = scheduledMonth
+        record.scheduledOccurrenceKey = scheduledOccurrenceKey
         record.createdAt = createdAt
         record.updatedAt = updatedAt
         record.deletedAt = deletedAt

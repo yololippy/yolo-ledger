@@ -21,8 +21,10 @@ public enum LedgerStorageError: Error, Equatable, Sendable, LocalizedError {
 }
 
 enum LocalLedgerStore {
-    static let currentSchemaVersion = "2.0.0"
-    static let supportedFolderSnapshotSchemaVersions: Set<String> = ["1.1.0", currentSchemaVersion]
+    static let currentSchemaVersion = "3.0.0"
+    static let supportedFolderSnapshotSchemaVersions: Set<String> = [
+        "1.1.0", "2.0.0", currentSchemaVersion,
+    ]
 
     static func makeContainer(
         at storeURL: URL,
@@ -41,7 +43,7 @@ enum LocalLedgerStore {
             for: storeURL,
             targetSchemaVersion: currentSchemaVersion
         )
-        let schema = Schema(versionedSchema: LedgerSchemaV2.self)
+        let schema = Schema(versionedSchema: LedgerSchemaV3.self)
         let cloudKitDatabase: ModelConfiguration.CloudKitDatabase
         let configurationName: String
         switch syncMode {

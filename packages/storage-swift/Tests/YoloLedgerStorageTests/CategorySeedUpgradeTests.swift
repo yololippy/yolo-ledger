@@ -68,17 +68,17 @@ struct CategorySeedUpgradeTests {
             let container = try LocalLedgerStore.makeContainer(at: directory.storeURL)
             let context = ModelContext(container)
             context.autosaveEnabled = false
-            context.insert(LedgerSchemaV2.BookRecord(
+            context.insert(LedgerSchemaV3.BookRecord(
                 id: LedgerSeedData.defaultBook.id,
                 name: "日常账本",
                 sortOrder: 0
             ))
-            context.insert(LedgerSchemaV2.BookRecord(
+            context.insert(LedgerSchemaV3.BookRecord(
                 id: importedDefaultID,
                 name: "默认账本",
                 sortOrder: 1
             ))
-            context.insert(LedgerSchemaV2.CategoryRecord(
+            context.insert(LedgerSchemaV3.CategoryRecord(
                 id: category.id,
                 name: category.name,
                 kindRawValue: category.kind.rawValue,
@@ -93,7 +93,7 @@ struct CategorySeedUpgradeTests {
                 kind: .expense,
                 offset: 0
             )
-            context.insert(LedgerSchemaV2.EntryRecord(
+            context.insert(LedgerSchemaV3.EntryRecord(
                 id: frozenID(8102),
                 bookID: importedDefaultID,
                 categoryID: category.id,
@@ -105,8 +105,8 @@ struct CategorySeedUpgradeTests {
                 createdAt: Date(timeIntervalSince1970: 1_700_100_100),
                 updatedAt: Date(timeIntervalSince1970: 1_700_200_100)
             ))
-            context.insert(LedgerSchemaV2.StoreMetadata(key: "starter-choices-v1"))
-            context.insert(LedgerSchemaV2.StoreMetadata(key: "starter-categories-v2"))
+            context.insert(LedgerSchemaV3.StoreMetadata(key: "starter-choices-v1"))
+            context.insert(LedgerSchemaV3.StoreMetadata(key: "starter-categories-v2"))
             try context.save()
         }
 
@@ -118,10 +118,10 @@ struct CategorySeedUpgradeTests {
 
         let container = try LocalLedgerStore.makeContainer(at: directory.storeURL)
         let context = ModelContext(container)
-        let duplicate = try #require(context.fetch(FetchDescriptor<LedgerSchemaV2.BookRecord>())
+        let duplicate = try #require(context.fetch(FetchDescriptor<LedgerSchemaV3.BookRecord>())
             .first { $0.id == importedDefaultID })
         #expect(duplicate.deletedAt != nil)
-        #expect(try context.fetch(FetchDescriptor<LedgerSchemaV2.StoreMetadata>())
+        #expect(try context.fetch(FetchDescriptor<LedgerSchemaV3.StoreMetadata>())
             .contains { $0.key == "starter-default-book-v3" })
 
         let reopened = try SwiftDataLedgerRepository(storeURL: directory.storeURL)
@@ -165,8 +165,8 @@ struct CategorySeedUpgradeTests {
             context.autosaveEnabled = false
             #expect(throws: (any Error).self) { try LedgerSeedBootstrap.initialize(in: context) }
             #expect(!context.hasChanges)
-            #expect(try context.fetch(FetchDescriptor<LedgerSchemaV2.CategoryRecord>()).count == 8)
-            #expect(try context.fetch(FetchDescriptor<LedgerSchemaV2.StoreMetadata>()).map(\.key) == ["starter-choices-v1"])
+            #expect(try context.fetch(FetchDescriptor<LedgerSchemaV3.CategoryRecord>()).count == 8)
+            #expect(try context.fetch(FetchDescriptor<LedgerSchemaV3.StoreMetadata>()).map(\.key) == ["starter-choices-v1"])
         }
         #expect(try persistedSnapshot(at: directory.storeURL) == before)
         let repository = try SwiftDataLedgerRepository(storeURL: directory.storeURL)
@@ -183,7 +183,7 @@ struct CategorySeedUpgradeTests {
             let container = try LocalLedgerStore.makeContainer(at: directory.storeURL)
             let context = ModelContext(container)
             context.autosaveEnabled = false
-            let category = try #require(context.fetch(FetchDescriptor<LedgerSchemaV2.CategoryRecord>())
+            let category = try #require(context.fetch(FetchDescriptor<LedgerSchemaV3.CategoryRecord>())
                 .first { $0.id == frozenID(105) })
             // After this upgrade, even a user choosing the old spelling is no longer a seed default.
             category.name = "其他支出"
@@ -228,29 +228,29 @@ private func makeLegacyV1Fixture(at url: URL, customized: Bool = false) throws {
     let container = try LocalLedgerStore.makeContainer(at: url)
     let context = ModelContext(container)
     context.autosaveEnabled = false
-    context.insert(LedgerSchemaV2.BookRecord(id: frozenID(1), name: "用户改名账本", sortOrder: 0))
+    context.insert(LedgerSchemaV3.BookRecord(id: frozenID(1), name: "用户改名账本", sortOrder: 0))
     for (order, value) in legacyCategories.enumerated() {
         let (suffix, defaultName, kind) = value
         let name = customized && suffix == 105 ? "我的杂项" : customized && suffix == 102 ? "我的通勤" : defaultName
-        context.insert(LedgerSchemaV2.CategoryRecord(
+        context.insert(LedgerSchemaV3.CategoryRecord(
             id: frozenID(suffix), name: name, kindRawValue: kind.rawValue, sortOrder: order
         ))
     }
-    context.insert(LedgerSchemaV2.StoreMetadata(key: "starter-choices-v1"))
+    context.insert(LedgerSchemaV3.StoreMetadata(key: "starter-choices-v1"))
     let originalChoices: [(Int, Int, LedgerEntryKind)] = [(105, 12345, .expense), (104, 999, .expense), (201, 100001, .income)]
     for (offset, choice) in originalChoices.enumerated() {
         insertFrozenEntry(in: context, suffix: 8001 + offset, bookSuffix: 1,
                           categorySuffix: choice.0, amount: Int64(choice.1), kind: choice.2, offset: offset)
     }
     if customized {
-        context.insert(LedgerSchemaV2.BookRecord(id: frozenID(9001), name: "自定义账本", sortOrder: 23))
-        context.insert(LedgerSchemaV2.CategoryRecord(
+        context.insert(LedgerSchemaV3.BookRecord(id: frozenID(9001), name: "自定义账本", sortOrder: 23))
+        context.insert(LedgerSchemaV3.CategoryRecord(
             id: frozenID(9901), name: "自定义项目", kindRawValue: "expense", sortOrder: 90
         ))
-        context.insert(LedgerSchemaV2.CategoryRecord(
+        context.insert(LedgerSchemaV3.CategoryRecord(
             id: frozenID(106), name: "家庭宠物护理", kindRawValue: "expense", sortOrder: 91
         ))
-        context.insert(LedgerSchemaV2.StoreMetadata(key: "user-metadata"))
+        context.insert(LedgerSchemaV3.StoreMetadata(key: "user-metadata"))
         insertFrozenEntry(in: context, suffix: 8004, bookSuffix: 9001,
                           categorySuffix: 9901, amount: 4567, kind: .expense, offset: 3)
     }
@@ -261,7 +261,7 @@ private func insertFrozenEntry(
     in context: ModelContext, suffix: Int, bookSuffix: Int, categorySuffix: Int,
     amount: Int64, kind: LedgerEntryKind, offset: Int
 ) {
-    context.insert(LedgerSchemaV2.EntryRecord(
+    context.insert(LedgerSchemaV3.EntryRecord(
         id: frozenID(suffix), bookID: frozenID(bookSuffix), categoryID: frozenID(categorySuffix),
         kindRawValue: kind.rawValue, amountMinorUnits: amount,
         occurredAt: Date(timeIntervalSince1970: 1_700_000_000 + Double(offset)),
@@ -295,13 +295,13 @@ private struct PersistedSeedSnapshot: Equatable {
 private func persistedSnapshot(at url: URL) throws -> PersistedSeedSnapshot {
     let container = try LocalLedgerStore.makeContainer(at: url)
     let context = ModelContext(container)
-    let books = try context.fetch(FetchDescriptor<LedgerSchemaV2.BookRecord>())
+    let books = try context.fetch(FetchDescriptor<LedgerSchemaV3.BookRecord>())
         .map { PersistedBook(id: $0.id, name: $0.name, sortOrder: $0.sortOrder) }
         .sorted { $0.id.uuidString < $1.id.uuidString }
-    let categories = try context.fetch(FetchDescriptor<LedgerSchemaV2.CategoryRecord>())
+    let categories = try context.fetch(FetchDescriptor<LedgerSchemaV3.CategoryRecord>())
         .map { PersistedCategory(id: $0.id, name: $0.name, kind: $0.kindRawValue, sortOrder: $0.sortOrder) }
         .sorted { $0.id.uuidString < $1.id.uuidString }
-    let entries = try context.fetch(FetchDescriptor<LedgerSchemaV2.EntryRecord>()).map { record in
+    let entries = try context.fetch(FetchDescriptor<LedgerSchemaV3.EntryRecord>()).map { record in
         LedgerEntry(
             id: record.id,
             draft: LedgerEntryDraft(
@@ -314,13 +314,13 @@ private func persistedSnapshot(at url: URL) throws -> PersistedSeedSnapshot {
             createdAt: record.createdAt, updatedAt: record.updatedAt
         )
     }.sorted { $0.date > $1.date }
-    let markers = Set(try context.fetch(FetchDescriptor<LedgerSchemaV2.StoreMetadata>()).map(\.key))
+    let markers = Set(try context.fetch(FetchDescriptor<LedgerSchemaV3.StoreMetadata>()).map(\.key))
     return PersistedSeedSnapshot(books: books, categories: categories, entries: entries, markers: markers)
 }
 
 @MainActor
 private func readOnlyContainer(at url: URL) throws -> ModelContainer {
-    let schema = Schema(versionedSchema: LedgerSchemaV2.self)
+    let schema = Schema(versionedSchema: LedgerSchemaV3.self)
     return try ModelContainer(
         for: schema,
         migrationPlan: LedgerMigrationPlan.self,

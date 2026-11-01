@@ -335,9 +335,9 @@ private func syncDraft(amount: Int64, note: String) -> LedgerEntryDraft {
 }
 
 @MainActor
-private func allEntryRecords(at storeURL: URL) throws -> [LedgerSchemaV2.EntryRecord] {
+private func allEntryRecords(at storeURL: URL) throws -> [LedgerSchemaV3.EntryRecord] {
     let container = try LocalLedgerStore.makeContainer(at: storeURL)
-    return try ModelContext(container).fetch(FetchDescriptor<LedgerSchemaV2.EntryRecord>())
+    return try ModelContext(container).fetch(FetchDescriptor<LedgerSchemaV3.EntryRecord>())
 }
 
 private func snapshotBase(deviceID: UUID, entries: [LedgerFolderSnapshot.Entry]) -> LedgerFolderSnapshot {

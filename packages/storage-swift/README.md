@@ -4,7 +4,7 @@ Swift Package、library product 和模块名均为 `YoloLedgerStorage`，依赖�
 
 ## M2 本地仓库
 
-`SwiftDataLedgerRepository` 实现 Core 的 `LedgerRepository`，可由 Mac / iPhone App 创建一次并注入共享界面：
+`SwiftDataLedgerRepository` 实现 Core 的 `LedgerRepository` 和 `LedgerScheduledEntryRepository`。当前由 iPhone App 创建一次并注入共享界面；存储 Package 继续保持 macOS 构建兼容，但本阶段不新增 Mac 产品功能：
 
 ```swift
 import YoloLedgerCore
@@ -25,7 +25,7 @@ let books = try await repository.fetchBooks()
 - `importMeowLedger(plans:)`：事务化导入一个或多个 Core 已解析的 `LedgerMeowImportPlan`，返回备份目录和批次核对报告。
 - `makeMeowImportHandler()`：生成 `LedgerMeowImportHandler` concrete 闭包，供 App 组装层适配成 UI 定义的注入接口；UI Package 无需依赖 Storage。
 
-仓库提供 `fetchBooks()`、`fetchCategories()`、`fetchEntries(bookID:)`、`createEntry(_:id:)`、`updateEntry(id:draft:)`、`deleteEntry(id:)`、`createBook(name:id:)` 和 `renameBook(id:name:)`。无参账目查询及自动分配 ID 的便捷入口沿用 Core 的协议扩展。
+仓库提供 `fetchBooks()`、`fetchCategories()`、`fetchEntries(bookID:)`、`createEntry(_:id:)`、`updateEntry(id:draft:)`、`deleteEntry(id:)`、`createBook(name:id:)` 和 `renameBook(id:name:)`，并实现定时规则版本保存、暂停／恢复／删除、到期处理和下次触发时间查询。无参账目查询及自动分配 ID 的便捷入口沿用 Core 的协议扩展。
 
 M1 的 `EmptyLedgerBookRepository` 继续保留，用于旧骨架和只需要 `LedgerBookRepository` 的空状态场景；实际 M2 App 使用上述磁盘仓库。
 
@@ -43,6 +43,17 @@ M1 的 `EmptyLedgerBookRepository` 继续保留，用于旧骨架和只需要 `L
 - 同一 App 的窗口和页面复用一个仓库实例。已验证同一实例内并发提交相同 ID 只有一次成功；多进程或多个活跃仓库同时写同一路径的场景尚未验收。
 - CloudKit 模式移除持久层唯一约束，由仓库按业务 UUID 去重。相同 UUID 以较新的修改／删除时间优先，时间相同时用稳定字段排序；账目删除写入 `deletedAt`，避免另一设备把已删除记录重新上传回来。
 - 旧 `CloudSyncMonitor` 兼容代码仍可表达未来 CloudKit 配置；当前本地模式下同一变更流由文件夹同步成功后主动触发，UI 据此重新读取。
+
+## 每月定时记账
+
+Storage 按 Core 的 `LedgerScheduledEntryRepository` 保存每月固定日／月末规则，并在 App 调用时处理已经到期的月份：
+
+- 同一规则使用稳定 `ruleID`。相同 `effectiveStartMonth` 的编辑、暂停和恢复会原位覆盖该月唯一版本，跨月修改才新增版本；历史月份按当月生效版本生成，修改规则不会改写已经生成的账目或 occurrence。
+- 暂停与恢复同样写入新版本，因此可以表示一段停用月份。删除规则会软删除其全部版本，但不会删除已经生成的账目或 occurrence 记录。
+- 每个规则每月的 occurrence 使用稳定键。账目与 occurrence 在同一个 `ModelContext.save()` 中提交；处理在内部 actor 串行执行，重复调用、并发调用和重启后都不会重复生成。
+- 用户删除自动生成的账目后，独立 occurrence 记录继续保留，因此该月不会再次生成。自动账目自身保存规则 ID、年月和 occurrence 键，来源固定为 `scheduled`。
+- 触发日期由 Core planner 使用调用方传入的手机当前系统日历及时区计算；固定 29／30／31 日会收敛到该月最后一天。
+- 当前规则版本和 occurrence 仅保存在本机 SwiftData 中，不参与文件夹同步；文件夹快照只随普通账目同步自动账目的来源与 occurrence 元数据。规则跨设备同步留待后续单独设计，不能据此认为两台设备会共享或共同执行同一规则。
 
 ## 喵喵记账 CSV 导入
 
@@ -75,7 +86,7 @@ let report = try await repository.synchronize(
 
 - SwiftData 本地库始终是运行时真源。同步目录只保存交换快照，不包含 `ledger.store`、SQLite、WAL 或 SHM。
 - 交换位置为 `有落记账同步数据/devices/<device UUID>.json`。每个安装只覆盖自己的快照，不删除其他设备文件；缺少某台设备的文件不表示删除数据。
-- JSON 协议当前写出 `formatVersion: 2`、`schemaVersion: 2.0.0`，使用排序键、缩进和带 9 位小数秒的 UTC ISO 8601 日期。快照包含账本、分类、账目的全部持久化字段、导入元数据及软删除时间；读取继续兼容不含导入字段的 format 1 / schema 1.1.0 快照。
+- JSON 协议当前写出 `formatVersion: 3`、`schemaVersion: 3.0.0`，使用排序键、缩进和带 9 位小数秒的 UTC ISO 8601 日期。快照包含账本、分类、账目的全部持久化字段、导入元数据、自动账目 occurrence 元数据及软删除时间；读取继续兼容 format 1／2 与 schema 1.1.0／2.0.0 快照。定时规则版本和独立 occurrence 处理记录不写入交换文件。
 - 每轮先通过 `NSFileCoordinator` 读取并完整解码所有设备快照，检查文件名／deviceID、版本、重复 UUID、枚举值、时间、账目引用和收支类型。任何损坏或不支持版本都会在修改本地前明确失败。
 - 合并以业务 UUID 为键，比较 `max(updatedAt, deletedAt)`；时间相同先选 tombstone，再按完整稳定字段和来源 deviceID 确定结果。tombstone 会继续导出，避免缺文件或旧快照让删除数据复活。
 - 本地变化在串行 `ModelActor` 中一次保存，失败统一 rollback。成功后把合并后的完整数据写到同目录临时文件，再原子替换本设备 JSON，并通过 `updates()` 通知界面重新读取。
@@ -85,11 +96,11 @@ let report = try await repository.synchronize(
 
 ## 数据版本
 
-内部保留 `LedgerSchemaV1` 1.1.0 的完整旧模型，当前 `LedgerSchemaV2` 为 2.0.0，在账目上增加全部可选的导入元数据字段。`LedgerMigrationPlan` 登记 V1 → V2 轻量迁移；真实 V1 SQLite 测试确认既有账本、分类、账目、金额、备注和时间不丢失，新字段迁移后为 nil。
+内部保留 `LedgerSchemaV1` 1.1.0 和 `LedgerSchemaV2` 2.0.0 的完整旧模型；当前 `LedgerSchemaV3` 为 3.0.0，在账目上增加可选的定时 occurrence 元数据，并新增规则版本与独立 occurrence 记录。`LedgerMigrationPlan` 登记 V1 → V2 → V3 两段轻量迁移；真实 V1／V2 SQLite 测试确认既有账本、分类、账目、金额、备注、时间和导入元数据不丢失，新定时字段迁移后为 nil。
 
 每次成功打开账库后，会在数据库旁记录当前 schema 版本。已有数据库首次由新 schema 打开前，存储层先把 SQLite 主文件、WAL 和 SHM 一起复制到同目录 `UpgradeSnapshots/before-<目标版本>/`；同一目标版本的快照只创建一次，失败或重试不会覆盖最初快照。快照完成前不启动 SwiftData 迁移，迁移失败不清库。今后新增 schema 时必须同时更新当前版本、保留旧 `VersionedSchema`、补迁移阶段和旧版本数据测试。
 
-打开 1.1.0 账库前仍会先生成不可覆盖的 `UpgradeSnapshots/before-2.0.0/` store family，再执行 staged migration。上线后 schema 继续只能向前兼容演进，并保留旧 schema 与迁移测试。
+打开 1.1.0 或 2.0.0 账库并升级到当前版本前，会先生成不可覆盖的 `UpgradeSnapshots/before-3.0.0/` store family，再执行 staged migration。上线后 schema 继续只能向前兼容演进，并保留旧 schema 与迁移测试。
 
 ## 本地数据保护
 
@@ -99,7 +110,7 @@ macOS 没有同一套 iOS 文件保护类；Mac 侧继续依赖 App Sandbox、�
 
 ## 分类种子数据升级
 
-`LedgerSeedBootstrap` 在打开仓库时处理种子内容版本，当前数据库 schema 为 V2；两者独立：
+`LedgerSeedBootstrap` 在打开仓库时处理种子内容版本，当前数据库 schema 为 V3；两者独立：
 
 - `starter-choices-v1` 保留原有账本／分类初始化含义。
 - 独立的 `starter-categories-v2` 标记记录新增分类及系统顺序升级；已有旧标记不会跳过此升级。
@@ -121,16 +132,18 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift build --package-p
 DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test --package-path packages/storage-swift
 ```
 
-2026-10-31 使用 Xcode 27.1 完成 macOS arm64 构建和 **39 项测试**。测试使用各自独立的真实临时磁盘文件，覆盖种子幂等、旧“日常账本”与已导入“默认账本”的无损合并、账目新增／更新／软删除后重开保留、精确大额金额、账本筛选与改名、并发重复 ID、CloudKit 型重复 UUID 收敛、无效输入、失败回滚、升级前快照只创建一次，以及文件系统错误和损坏数据库不被清空。
+2026-11-01 使用 Xcode 27.1 完成 macOS arm64 Package 构建和 **47 项测试**。测试使用各自独立的真实临时磁盘文件，覆盖种子幂等、旧“日常账本”与已导入“默认账本”的无损合并、账目新增／更新／软删除后重开保留、精确大额金额、账本筛选与改名、并发重复 ID、CloudKit 型重复 UUID 收敛、无效输入、失败回滚、升级前快照只创建一次，以及文件系统错误和损坏数据库不被清空。
 
 其中 5 项分类升级测试先直接写入冻结的旧 8 分类、旧初始化标记、旧账目和改名账本，真实落盘后再打开仓库升级；覆盖新旧安装一致、自定义数据保留、重开无重复、只读保存失败回滚与重试，以及已升级库无需再保存。
 
-其中 9 项文件夹同步测试使用真实临时交换目录和两个独立 SwiftData store / deviceID，覆盖 A 新增后 B 导入、B 修改和删除后 A 收敛、双方离线新增、相同时间确定性与 tombstone 优先、同一秒内小数时间顺序、旧 format 1 兼容、损坏与不支持版本不改本地、原子替换无临时残留、重开保留及成功后的更新通知。Storage 共 40 项测试通过，另含真实 SwiftData 有界日期查询和分类备注范围测试。
+其中 10 项文件夹同步相关测试使用真实临时交换目录和两个独立 SwiftData store / deviceID，覆盖 A 新增后 B 导入、B 修改和删除后 A 收敛、双方离线新增、相同时间确定性与 tombstone 优先、同一秒内小数时间顺序、旧 format 1 兼容、损坏与不支持版本不改本地、原子替换无临时残留、重开保留、成功后的更新通知，以及只交换自动账目元数据而不交换规则与 occurrence 处理记录。
 
 其中 6 项喵喵导入测试覆盖真实 V1 → V2 staged migration、未知账本／分类创建、账户货币和全部原始字段保真、收支报告、导入前备份可读、多文件整批回滚、备份失败不落库、文件内合法重复、重复文件／跨文件去重、重开保留，以及两台 store 独立导入后经文件夹同步保持单条和元数据一致。
+
+其中 7 项定时存储测试覆盖真实 V2 → V3 staged migration、规则版本持久化和重复月份拒绝、历史月份按版本生成、月末收敛、暂停／恢复、下次触发时间、删除账目后不重建、删除规则后停止、并发幂等、重启后去重和文件夹同步边界。
 
 损坏库与只读升级失败测试会触发预期的 Core Data 错误日志；测试同时断言错误可捕获且原数据保留。本次分类升级的 iOS 构建与双端 App 体验仍由 Apple / main 集成验收。
 
 ## 后续职责与边界
 
-本轮实现本地账本与账目操作、一次性种子初始化、喵喵记账批量导入及导入前恢复快照、用户选定文件夹的完整快照交换、同步事件通知和冲突收敛。自动恢复 UI、一般用途完整备份恢复、分类管理、其他批量操作恢复和定时规则仍属于后续任务；真实 iCloud Drive 双设备下载／上传时机、bookmark 权限恢复、网络中断及物理 iPhone 后台行为仍待验收。旧 CloudKit 代码只作为未来可选实现保留，不是当前 App 配置。
+本轮实现本地账本与账目操作、一次性种子初始化、喵喵记账批量导入及导入前恢复快照、用户选定文件夹的完整快照交换、同步事件通知和冲突收敛，以及本机每月定时规则的版本化存储与幂等到期处理。自动恢复 UI、一般用途完整备份恢复、分类管理、其他批量操作恢复、定时规则跨设备同步及系统后台唤醒仍属于后续任务；真实 iCloud Drive 双设备下载／上传时机、bookmark 权限恢复、网络中断及物理 iPhone 前后台调度仍待验收。旧 CloudKit 代码只作为未来可选实现保留，不是当前 App 配置。
