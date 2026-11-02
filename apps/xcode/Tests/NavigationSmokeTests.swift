@@ -13,7 +13,8 @@ final class NavigationSmokeTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["暂无明细"].waitForExistence(timeout: 15))
         attachScreenshot(app, name: "01-details")
         navigate(app, destination: "bills", title: "账单")
-        XCTAssertTrue(app.staticTexts["暂无账单"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.descendants(matching: .any)["statistics.donut"].firstMatch.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["本月暂无支出账目"].exists)
         attachScreenshot(app, name: "02-bills")
         navigate(app, destination: "books", title: "账本")
         XCTAssertTrue(app.buttons["book.add"].waitForExistence(timeout: 10))
@@ -42,6 +43,72 @@ final class NavigationSmokeTests: XCTestCase {
     }
 
     #if os(iOS)
+    func testBillStatisticsExpenseIncomeExpandAndDrillDown() throws {
+        let app = makeApplication()
+        app.launchArguments.append("--ui-test-statistics")
+        app.launch()
+
+        navigate(app, destination: "bills", title: "账单")
+        let trend = app.descendants(matching: .any)["statistics.trend"].firstMatch
+        let donut = app.descendants(matching: .any)["statistics.donut"].firstMatch
+        XCTAssertTrue(trend.waitForExistence(timeout: 15))
+        XCTAssertTrue(donut.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["statistics.kind.expense"].isSelected)
+        attachScreenshot(app, name: "statistics-expense-overview")
+
+        let categoryExpand = app.buttons["statistics.categories.expand"]
+        scrollUpUntilHittable(categoryExpand, in: app)
+        attachScreenshot(app, name: "statistics-expense-ranking")
+        categoryExpand.tap()
+        XCTAssertEqual(categoryExpand.value as? String, "已展开")
+        let snackCategory = app.buttons["statistics.category.A20E127A-36F6-401A-A6E3-000000000108"]
+        scrollUpUntilHittable(snackCategory, in: app)
+        snackCategory.tap()
+
+        XCTAssertTrue(app.descendants(matching: .any)["statistics.drilldown"].firstMatch.waitForExistence(timeout: 5))
+        let snackEntry = app.buttons["statistics.drilldown.entry.B20E127A-36F6-401A-A6E3-000000001006"]
+        XCTAssertTrue(snackEntry.waitForExistence(timeout: 5))
+        snackEntry.tap()
+        XCTAssertTrue(app.staticTexts["detail.amount"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["detail.amount"].label.contains("45.00"))
+        app.buttons["detail.close"].tap()
+        XCTAssertTrue(snackEntry.waitForExistence(timeout: 5))
+        app.buttons["statistics.drilldown.close"].tap()
+
+        let entryExpand = app.buttons["statistics.entries.expand"]
+        scrollUpUntilHittable(entryExpand, in: app)
+        entryExpand.tap()
+        XCTAssertEqual(entryExpand.value as? String, "已展开")
+        let lowerEntry = app.buttons["statistics.entry.B20E127A-36F6-401A-A6E3-000000001005"]
+        scrollUpUntilHittable(lowerEntry, in: app)
+        lowerEntry.tap()
+        XCTAssertTrue(app.staticTexts["detail.amount"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["detail.amount"].label.contains("80.00"))
+        app.buttons["detail.close"].tap()
+
+        let incomeButton = app.buttons["statistics.kind.income"]
+        scrollDownUntilHittable(incomeButton, in: app)
+        incomeButton.tap()
+        XCTAssertTrue(incomeButton.isSelected)
+
+        let salaryCategory = app.buttons["statistics.category.A20E127A-36F6-401A-A6E3-000000000201"]
+        scrollUpUntilHittable(salaryCategory, in: app)
+        XCTAssertTrue(salaryCategory.exists)
+        attachScreenshot(app, name: "statistics-income-ranking")
+
+        let calendar = Calendar.current
+        let previousMonth = try XCTUnwrap(calendar.date(byAdding: .month, value: -1, to: Date()))
+        let components = calendar.dateComponents([.year, .month], from: previousMonth)
+        let monthID = String(format: "%04d-%02d", components.year ?? 0, components.month ?? 0)
+        let previousTrend = app.buttons["statistics.trend.month.\(monthID)"]
+        scrollDownUntilHittable(previousTrend, in: app)
+        previousTrend.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["statistics.drilldown"].firstMatch.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["statistics.drilldown.entry.B20E127A-36F6-401A-A6E3-000000001011"].exists)
+        attachScreenshot(app, name: "statistics-trend-drilldown")
+        app.buttons["statistics.drilldown.close"].tap()
+    }
+
     func testScheduledEntryCreateEditPauseAndDeleteFlow() throws {
         let app = makeApplication()
         app.launchArguments.append("--ui-test-scheduled-entries")
@@ -687,6 +754,28 @@ final class NavigationSmokeTests: XCTestCase {
         attachment.lifetime = .keepAlways
         add(attachment)
     }
+
+    #if os(iOS)
+    private func scrollUpUntilHittable(
+        _ element: XCUIElement,
+        in app: XCUIApplication,
+        attempts: Int = 8
+    ) {
+        for _ in 0..<attempts where !element.isHittable { app.swipeUp() }
+        XCTAssertTrue(element.waitForExistence(timeout: 3))
+        XCTAssertTrue(element.isHittable)
+    }
+
+    private func scrollDownUntilHittable(
+        _ element: XCUIElement,
+        in app: XCUIApplication,
+        attempts: Int = 8
+    ) {
+        for _ in 0..<attempts where !element.isHittable { app.swipeDown() }
+        XCTAssertTrue(element.waitForExistence(timeout: 3))
+        XCTAssertTrue(element.isHittable)
+    }
+    #endif
 
     private func assertValue(_ element: XCUIElement, contains expected: String, timeout: TimeInterval = 5) {
         let expectation = XCTNSPredicateExpectation(

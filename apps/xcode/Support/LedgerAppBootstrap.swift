@@ -42,6 +42,11 @@ final class LedgerAppBootstrap {
             let repository = try await Task.detached(priority: .userInitiated) {
                 try SwiftDataLedgerRepository(storeURL: storeURL, syncMode: .local)
             }.value
+            #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("--ui-test-statistics") {
+                try await Self.seedStatisticsUITest(repository: repository)
+            }
+            #endif
             self.repository = repository
             let importHandler = repository.makeMeowImportHandler()
             meowImportController.installImportAction { [folderSyncController] plans in
@@ -143,6 +148,64 @@ final class LedgerAppBootstrap {
     }
 
     #if DEBUG
+    private static func seedStatisticsUITest(repository: SwiftDataLedgerRepository) async throws {
+        let calendar = Calendar.current
+        let monthRange = try LedgerDateRanges.range(for: .month, containing: Date(), calendar: calendar)
+        let categories = try await repository.fetchCategories()
+
+        func category(_ name: String, _ kind: LedgerEntryKind) throws -> LedgerCategory {
+            guard let category = categories.first(where: { $0.name == name && $0.kind == kind }) else {
+                throw LaunchError.invalidStatisticsSeed
+            }
+            return category
+        }
+
+        func seedDate(monthOffset: Int, dayOffset: Int) throws -> Date {
+            guard
+                let month = calendar.date(byAdding: .month, value: monthOffset, to: monthRange.start),
+                let day = calendar.date(byAdding: .day, value: dayOffset, to: month)
+            else { throw LaunchError.invalidStatisticsSeed }
+            return day
+        }
+
+        let bookID = LedgerSeedData.defaultBook.id
+        let rows: [(String, String, LedgerEntryKind, String, Int, Int, String)] = [
+            ("B20E127A-36F6-401A-A6E3-000000001001", "住房", .expense, "2000.00", 0, 2, "本月房租"),
+            ("B20E127A-36F6-401A-A6E3-000000001002", "购物", .expense, "300.00", 0, 5, "生活采购"),
+            ("B20E127A-36F6-401A-A6E3-000000001003", "餐饮", .expense, "120.50", 0, 8, "周末聚餐"),
+            ("B20E127A-36F6-401A-A6E3-000000001004", "餐饮", .expense, "60.00", 0, 12, "午餐"),
+            ("B20E127A-36F6-401A-A6E3-000000001005", "交通", .expense, "80.00", 0, 15, "通勤"),
+            ("B20E127A-36F6-401A-A6E3-000000001006", "零食", .expense, "45.00", 0, 18, "咖啡零食"),
+            ("B20E127A-36F6-401A-A6E3-000000001007", "工资", .income, "5000.00", 0, 3, "本月工资"),
+            ("B20E127A-36F6-401A-A6E3-000000001008", "奖金", .income, "500.00", 0, 10, "项目奖金"),
+            ("B20E127A-36F6-401A-A6E3-000000001009", "其他收入", .income, "100.00", 0, 17, "闲置转卖"),
+            ("B20E127A-36F6-401A-A6E3-000000001010", "住房", .expense, "1500.00", -1, 2, "上月房租"),
+            ("B20E127A-36F6-401A-A6E3-000000001011", "工资", .income, "5000.00", -1, 3, "上月工资"),
+            ("B20E127A-36F6-401A-A6E3-000000001012", "工资", .income, "5000.00", -2, 3, "前月工资"),
+            ("B20E127A-36F6-401A-A6E3-000000001013", "旅行", .expense, "800.00", -3, 6, "短途旅行"),
+            ("B20E127A-36F6-401A-A6E3-000000001014", "餐饮", .expense, "125.00", -4, 9, "朋友聚餐"),
+            ("B20E127A-36F6-401A-A6E3-000000001015", "购物", .expense, "320.00", -5, 11, "换季采购"),
+        ]
+
+        let existingRange = try LedgerStatisticsCalculator.sixMonthDateRange(
+            endingAtMonthContaining: monthRange.start,
+            calendar: calendar
+        )
+        let existingIDs = Set(try await repository.fetchEntries(bookID: bookID, dateRange: existingRange).map(\.id))
+        for row in rows {
+            guard let id = UUID(uuidString: row.0), !existingIDs.contains(id) else { continue }
+            let draft = LedgerEntryDraft(
+                bookID: bookID,
+                categoryID: try category(row.1, row.2).id,
+                kind: row.2,
+                amount: try LedgerAmount(input: row.3),
+                date: try seedDate(monthOffset: row.4, dayOffset: row.5),
+                note: row.6
+            )
+            _ = try await repository.createEntry(draft, id: id)
+        }
+    }
+
     private static var meowImportUITestDocuments: [LedgerMeowImportDocument] {
         let header = "分类,时间,金额,账户,账本,货币,备注"
         let formatter = DateFormatter()
@@ -168,11 +231,12 @@ final class LedgerAppBootstrap {
 }
 
 private enum LaunchError: LocalizedError {
-    case injectedFailure, invalidTestStore
+    case injectedFailure, invalidTestStore, invalidStatisticsSeed
     var errorDescription: String? {
         switch self {
         case .injectedFailure: "测试启动失败，请点击重试。"
         case .invalidTestStore: "测试账库标识无效。"
+        case .invalidStatisticsSeed: "统计界面测试数据无法建立。"
         }
     }
 }

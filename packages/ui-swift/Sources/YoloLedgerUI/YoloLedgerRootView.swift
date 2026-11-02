@@ -16,6 +16,7 @@ private enum LedgerDestination: String, CaseIterable, Identifiable {
 @MainActor
 public struct YoloLedgerRootView: View {
     @State private var model: LedgerAppModel
+    @State private var statistics: LedgerStatisticsController
     private let folderSync: LedgerFolderSyncController?
     private let meowImport: LedgerMeowImportController?
     private let scheduledEntries: LedgerScheduledEntryController?
@@ -42,6 +43,7 @@ public struct YoloLedgerRootView: View {
             repository: repository,
             onLocalMutation: { folderSync?.localDataDidChange() }
         ))
+        _statistics = State(initialValue: LedgerStatisticsController(repository: repository))
         _pendingScreenshotProposal = .constant(nil)
     }
 
@@ -59,6 +61,7 @@ public struct YoloLedgerRootView: View {
             repository: repository,
             onLocalMutation: { folderSync?.localDataDidChange() }
         ))
+        _statistics = State(initialValue: LedgerStatisticsController(repository: repository))
         _pendingScreenshotProposal = pendingScreenshotProposal
     }
 
@@ -275,8 +278,14 @@ public struct YoloLedgerRootView: View {
                 }.padding(14).background(theme.primarySoft)
             }
             switch selection {
-            case .bills, .details:
-                LedgerEntriesView(model: model, isMonthly: selection == .bills) { selectedEntry = $0 }
+            case .bills:
+                #if os(iOS)
+                LedgerStatisticsView(model: model, controller: statistics)
+                #else
+                LedgerEntriesView(model: model, isMonthly: true) { selectedEntry = $0 }
+                #endif
+            case .details:
+                LedgerEntriesView(model: model, isMonthly: false) { selectedEntry = $0 }
             case .books: LedgerBooksView(model: model)
             case .settings:
                 LedgerProfileView(

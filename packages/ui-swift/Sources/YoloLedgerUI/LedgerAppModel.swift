@@ -15,6 +15,7 @@ final class LedgerAppModel {
     private(set) var loadError: String?
     private(set) var operationError: String?
     private(set) var syncState: LedgerSyncState
+    private(set) var statisticsRevision = 0
     private(set) var referenceDate = Date()
     private(set) var displayedMonth = Date()
     private(set) var selectedDay: Date?
@@ -173,6 +174,7 @@ final class LedgerAppModel {
             recentNotesByCategory.removeAll(keepingCapacity: true)
             syncState = repository.currentSyncState()
             hasLoaded = true
+            statisticsRevision &+= 1
         } catch is CancellationError {
             // A newer refresh or the next appearance will own the snapshot.
         } catch {

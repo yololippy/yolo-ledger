@@ -5,12 +5,19 @@ import YoloLedgerCore
 struct EntryDetailView: View {
     let model: LedgerAppModel
     let entryID: UUID
+    let fallbackEntry: LedgerEntry?
     @Environment(\.dismiss) private var dismiss
     @Environment(\.ledgerTheme) private var theme
     @State private var isEditing = false
     @State private var confirmsDelete = false
     @State private var errorMessage: String?
-    private var entry: LedgerEntry? { model.entries.first { $0.id == entryID } }
+    private var entry: LedgerEntry? { model.entries.first { $0.id == entryID } ?? fallbackEntry }
+
+    init(model: LedgerAppModel, entryID: UUID, fallbackEntry: LedgerEntry? = nil) {
+        self.model = model
+        self.entryID = entryID
+        self.fallbackEntry = fallbackEntry
+    }
 
     var body: some View {
         ZStack {

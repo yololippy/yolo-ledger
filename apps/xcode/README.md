@@ -60,7 +60,7 @@ open -n /tmp/yolo-ledger-meow-macos/Build/Products/Debug/YoloLedgerMac.app \
   --args --ui-test-store 793D8F42-6503-4F04-9C89-225BF2385B4A
 ```
 
-`--ui-test-fail-open-once` 仅在 DEBUG 模拟一次打开失败。测试验证错误、没有编辑入口，以及重试后打开真实磁盘仓库。
+`--ui-test-fail-open-once` 仅在 DEBUG 模拟一次打开失败。测试验证错误、没有编辑入口，以及重试后打开真实磁盘仓库。`--ui-test-statistics` 仅向当前独立测试账库写入脱敏且固定标识的六个月收支样本，用于统计页交互和截图，不影响日常账库。
 
 ## iPhone 流程测试
 
@@ -81,6 +81,13 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild \
 ```
 
 重复执行需要新的 `.xcresult` 路径。仅运行导航／选项可加 `-only-testing:YoloLedgerIOSUITests/NavigationSmokeTests/testFourDestinationsAreReachable`。
+
+## iPhone 账单统计验证（2026-11-02）
+
+- iPhone“账单”已接入支出／收入切换、固定六个月趋势、分类占比、分类排行、明细排行，以及分类／月份列表和票据详情逐层钻取；Mac 账单页面保持原实现，只验证构建兼容。
+- `YoloLedgerUI` 39 项状态测试通过，其中 4 项覆盖统计的精确有界查询、空月份保留、收支切换、并发旧请求防覆盖、失败保留结果与重试。
+- iPhone 18 Pro / iOS 27.0 专项 UI 测试覆盖支出概览、分类／明细展开与钻取、详情返回、收入切换、收入排行和上月趋势钻取，结果为 `/tmp/yolo-ledger-statistics-final-2.xcresult`。
+- 三张实际截图已导出并检查：`/tmp/yolo-ledger-statistics-screenshots/`，分别为支出概览、收入排行和趋势钻取；样本均为 DEBUG 独立测试账库中的脱敏数据。
 
 ## iPhone 定时记账验证（2026-11-01）
 
