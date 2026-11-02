@@ -122,6 +122,15 @@ func synchronize(
 - `LedgerSummary(entries:dateRange:) throws` 对传入记录计算 `incomeMinorUnits`、`expenseMinorUnits`、`balanceMinorUnits` 和 `entryCount`。选中账本时传入该账本的记录；可用 `dateRange` 筛选时间，省略则汇总全部。
 - 空汇总为 `.zero`；结余允许为负数。收入或支出总额超出 `Int64` 时抛出 `summaryOverflow`，不会回绕或丢失精度。
 
+### 账单统计
+
+- `LedgerStatisticsCalculator.snapshot(entries:categories:kind:dateRange:)` 对任意半开日期范围计算指定收入／支出方向的总金额、笔数、分类聚合与单笔排行。`rankedEntries` 保留完整 `LedgerEntry` 和稳定 ID，可直接作为详情下钻的数据来源。
+- `LedgerCategoryStatistics` 按分类 UUID 聚合金额与笔数；`share` 保存精确的金额分子和总额分母，Core 不提前转换为浮点百分比。找不到分类或分类方向不匹配时保留原 UUID，使用“未知分类”并将 `isKnownCategory` 设为 `false`。分类结果和每个趋势点都提供稳定排序的 `entryIDs`，点击环形分类、类目排行或趋势点时可精确下钻。
+- 分类按金额降序、名称 Unicode 顺序、UUID 字符串升序稳定排列；单笔按金额降序、记账日期降序、创建时间降序、UUID 字符串升序稳定排列，不依赖存储返回顺序。
+- `LedgerStatisticsCalculator.monthly(entries:categories:kind:monthContaining:calendar:)` 返回选中自然月的统计快照和截至该月的最近 6 个自然月趋势。趋势从最早月份到选中月份固定返回 6 个点，没有记录的月份仍返回金额和笔数为零的点。
+- Apple 侧先调用 `sixMonthDateRange(endingAtMonthContaining:calendar:)` 获取有界查询范围，再由 Storage 按当前账本读取这 6 个月的账目并传给 `monthly`。Core 只计算，不依赖 SwiftData、SwiftUI 或图表框架；本项不代表统计 UI 已完成。
+- 全部金额使用 `Int64` 分并检查加总溢出；溢出抛出 `summaryOverflow`。无效记账日期、创建时间或选中月份抛出 `invalidDate`；日历由调用方注入并跟随设备当前本地时区。
+
 ### 初始数据与范围
 
 `LedgerSeedData.books` 包含“默认账本”，`defaultBook` 提供其稳定 ID；旧版内置“日常账本”由 Storage 的一次性种子迁移合并到“默认账本”。`categories` 按用户于 2026-10-28 提供的喵喵记账截图补齐支出分类，顺序为：**餐饮、交通、购物、宠物、住房、零食、旅行、通讯、医疗、Pos、其它、礼金、运动**。原有“日用”额外保留在支出末尾，收入仍为工资、奖金、其他收入。截图中的“设置”是分类管理入口，不加入分类种子，也不扩展本轮分类 CRUD。
@@ -148,7 +157,7 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test --package-pa
 
 Manifest 使用 `swift-tools-version: 6.0`，Swift 语言模式为 6。临时构建基线为 macOS 14 / iOS 17；产品最低支持系统版本仍待 main 确认。
 
-验证记录（2026-11-01）：使用指定 Xcode 的 Swift 6.4 / arm64 环境运行上述测试命令，构建通过，**88 项测试全部通过**。其中 8 项定时记账算法测试覆盖固定日期月底收敛、最后一天、闰年、注入时区、跨月补记、已处理／已删除 occurrence、暂停恢复、未来月份修改边界、下一执行日、稳定 key 和非法规则；2 项仓库边界测试覆盖 existential 注入、完整规则生命周期、原子处理结果、下一日期及领域错误；截图识别现有 15 项文字规则测试与 8 项原图 Vision 集成测试，覆盖上方商户与下方促销冲突、多个金额的局部／分行标签、按钮广告排除、分行商户标签和无交易日期；其余测试继续覆盖 CSV 导入、文件夹同步、产品元数据、金额、表达式、汇总、本地日期范围、DST、关联校验、默认账本名称和分类种子。
+验证记录（2026-11-02）：使用指定 Xcode 的 Swift 6.4 / arm64 环境运行上述测试命令，构建通过，**96 项测试全部通过**。其中 8 项账单统计测试覆盖收入／支出切换、半开范围边界、精确占比基础数据、未知分类、分类与单笔稳定排序、跨年六个月趋势、零月份、本地 Calendar、溢出和无效日期；8 项定时记账算法测试覆盖固定日期月底收敛、最后一天、闰年、注入时区、跨月补记、已处理／已删除 occurrence、暂停恢复、未来月份修改边界、下一执行日、稳定 key 和非法规则；2 项仓库边界测试覆盖 existential 注入、完整规则生命周期、原子处理结果、下一日期及领域错误；截图识别现有 15 项文字规则测试与 8 项原图 Vision 集成测试；其余测试继续覆盖 CSV 导入、文件夹同步、产品元数据、金额、表达式、基础汇总、本地日期范围、DST、关联校验、默认账本名称和分类种子。
 
 ## 后续业务约定
 
