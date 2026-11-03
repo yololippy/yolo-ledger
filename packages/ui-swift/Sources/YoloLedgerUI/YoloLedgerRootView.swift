@@ -213,7 +213,10 @@ public struct YoloLedgerRootView: View {
                 }
                 Spacer()
                 addButton
-                Text("\(YoloLedgerProduct.englishName) · 离线可用").font(.caption2).foregroundStyle(theme.muted)
+                Text("\(YoloLedgerProduct.englishName) · \(folderSync?.compactStatus ?? "仅存储在本机")")
+                    .font(.caption2)
+                    .foregroundStyle(theme.muted)
+                    .accessibilityIdentifier("navigation.sync-status")
             }.padding(22).frame(width: 195).background(theme.primarySoft)
             Rectangle().fill(theme.ink).frame(width: 1)
             destinationView.frame(maxWidth: .infinity)

@@ -114,6 +114,21 @@ public final class LedgerFolderSyncController {
         return false
     }
 
+    public var compactStatus: String {
+        switch state {
+        case .notConfigured:
+            "仅存储在本机"
+        case let .idle(lastReport):
+            lastReport == nil ? "同步已开启" : "已同步"
+        case .syncing:
+            "正在同步…"
+        case .succeeded:
+            "已同步"
+        case .failed:
+            "同步失败"
+        }
+    }
+
     private static func reportText(_ report: LedgerFolderSyncReport) -> String {
         "上次成功：\(report.completedAt.formatted(date: .abbreviated, time: .shortened))；导入 \(report.importedRecordCount) 条，导出 \(report.exportedRecordCount) 条。"
     }

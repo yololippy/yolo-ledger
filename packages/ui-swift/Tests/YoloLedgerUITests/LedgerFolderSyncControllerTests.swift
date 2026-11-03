@@ -11,11 +11,13 @@ struct LedgerFolderSyncControllerTests {
         let folderName = "\(YoloLedgerProduct.displayName)同步"
         #expect(!controller.isConfigured)
         #expect(controller.detail.contains("iCloud Drive"))
+        #expect(controller.compactStatus == "仅存储在本机")
 
         controller.update(folderName: folderName, state: .syncing)
         #expect(controller.isConfigured)
         #expect(controller.isSynchronizing)
         #expect(controller.title == folderName)
+        #expect(controller.compactStatus == "正在同步…")
 
         let report = LedgerFolderSyncReport(
             importedRecordCount: 3,
@@ -26,9 +28,17 @@ struct LedgerFolderSyncControllerTests {
         #expect(controller.successfulSyncRevision == 1)
         #expect(controller.detail.contains("导入 3 条"))
         #expect(controller.detail.contains("导出 5 条"))
+        #expect(controller.compactStatus == "已同步")
 
         controller.update(folderName: folderName, state: .failed(message: "权限已撤销。"))
         #expect(controller.detail.contains("本地账目不受影响"))
+        #expect(controller.compactStatus == "同步失败")
+
+        controller.update(folderName: folderName, state: .idle(lastReport: nil))
+        #expect(controller.compactStatus == "同步已开启")
+
+        controller.update(folderName: folderName, state: .idle(lastReport: report))
+        #expect(controller.compactStatus == "已同步")
     }
 
     @Test
