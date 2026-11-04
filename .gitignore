@@ -12,3 +12,6 @@ xcuserdata/
 *.p12
 *.mobileprovision
 *.provisionprofile
+
+# Local Agent runtime state
+.agents/runtime/
