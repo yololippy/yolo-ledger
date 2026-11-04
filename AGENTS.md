@@ -47,4 +47,4 @@
 
 ## 多会话协作
 
-用户已要求只由标题精确为 `main` 的本仓库会话协调 Core、Storage、Apple 及按需创建的其他 Agent。跨会话分工时读取 [yolo-ledger-coordination](.agents/skills/yolo-ledger-coordination/SKILL.md)，按其中的目录归属协调写入，由 main 统一集成和更新根目录 TODO。当前授权范围以 TODO 和用户指令为准；会话 ID 仅保存在 Git 忽略的 `.agents/runtime/yolo-ledger-coordination/team.local.md`，不写入 skill 或版本控制文件。
+用户已要求只由标题精确为 `main` 的本仓库会话协调 Core、Storage、Apple 及按需创建的其他 Agent。`apps/`、`packages/` 产品代码改动默认由 main 新建或派发给非 main Agent 实施；用户明确要求 main 直接修改时，以该次指令为准。跨会话分工时读取 [yolo-ledger-coordination](.agents/skills/yolo-ledger-coordination/SKILL.md)，按其中的目录归属协调写入。当前授权范围以 TODO 和用户指令为准；会话 ID 仅保存在 Git 忽略的 `.agents/runtime/yolo-ledger-coordination/team.local.md`，不写入 skill 或版本控制文件。

@@ -11,6 +11,7 @@ description: "在 yolo-ledger 中只由标题精确为 main 的主会话协调 C
 
 - 只有标题精确为 `main` 且工作目录为 `/Users/yololippy/project/yolo-ledger` 的当前会话可以担任主会话；其他会话不得自行改名取得权限。
 - main 是唯一可以创建、派遣、等待、读取和管理 Agent 的会话，也是唯一负责跨模块协调、结果集成、根目录 TODO 更新、Git 操作和用户总汇报的会话。
+- `apps/`、`packages/` 产品代码改动默认由 main 新建或派发给非 main Agent 实施，main 负责调研、方案、分工、审阅和集成验证；用户明确要求 main 直接修改时，以该次指令为准，不再创建或转派 Agent。
 - 非 main 会话不得给 main 或任何其他 Agent 发消息，不得创建、派遣、等待、读取或管理 Agent，也不得继续分派任务；只执行 main 直接派发的任务，并在自己的最终回复中报告。
 - 用户已授权 main 在当前开发范围内按需创建固定角色或其他专项 Agent，无需逐个请求确认；创建 Agent 不扩大用户已授权的产品或开发范围。
 - 归档表示会话已经退役。main 不查询、读取、复用或取消归档会话；没有合适的活动 Agent 时直接新建。
@@ -20,7 +21,7 @@ description: "在 yolo-ledger 中只由标题精确为 main 的主会话协调 C
 
 | 会话 | 负责内容 | 默认可写范围（开发获授权后） |
 | --- | --- | --- |
-| main | 拆分任务、协调接口、集成、验收、用户沟通、Git 操作 | 根目录文档、`.agents/`、`docs/` 及统一配置 |
+| main | 拆分任务、协调接口、审阅、集成验收、用户沟通、Git 操作 | 根目录文档、`.agents/`、`docs/` 及统一配置；产品代码默认交给非 main Agent，用户明确指定时可直接修改 |
 | Core | 领域模型、金额与日期计算、记账与统计规则、核心接口及测试 | `packages/core-swift/` |
 | Storage | 本地持久化、迁移、备份恢复、存储适配及测试 | `packages/storage-swift/` |
 | Apple | 共享 SwiftUI、iPhone 功能与平台入口、Xcode 工程；保留 Mac 构建兼容 | `packages/ui-swift/`、`apps/` |
