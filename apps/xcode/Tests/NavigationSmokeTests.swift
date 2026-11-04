@@ -219,6 +219,38 @@ final class NavigationSmokeTests: XCTestCase {
         XCTAssertFalse(app.buttons["settings.meow-import.choose"].exists)
     }
 
+    func testClosingFolderSyncUsesCenteredAlertAndSupportsCancelAndConfirm() throws {
+        let app = makeApplication()
+        app.launchArguments.append("--ui-test-folder-sync")
+        app.launch()
+
+        navigate(app, destination: "settings", title: "我的")
+        let closeButton = app.buttons["settings.folder-sync.stop"]
+        scrollUpUntilHittable(closeButton, in: app)
+        XCTAssertEqual(closeButton.label, "关闭文件夹同步")
+        closeButton.tap()
+
+        let alert = app.alerts["关闭文件夹同步？"]
+        XCTAssertTrue(alert.waitForExistence(timeout: 5))
+        XCTAssertTrue(alert.staticTexts["本机账目会继续保留，文件夹中的同步文件不会删除。以后可以重新选择文件夹继续同步。"].exists)
+        let window = app.windows.firstMatch
+        let settingsTab = app.buttons["navigation.settings"]
+        XCTAssertLessThan(abs(alert.frame.midY - window.frame.midY), window.frame.height * 0.2)
+        XCTAssertLessThan(alert.frame.maxY, settingsTab.frame.minY)
+        attachScreenshot(app, name: "folder-sync-close-alert")
+
+        alert.buttons["取消"].tap()
+        XCTAssertTrue(closeButton.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["测试同步文件夹"].exists)
+
+        closeButton.tap()
+        XCTAssertTrue(alert.waitForExistence(timeout: 5))
+        let confirmButton = app.buttons["settings.folder-sync.stop.confirm"].firstMatch
+        XCTAssertTrue(confirmButton.waitForExistence(timeout: 5))
+        confirmButton.tap()
+        XCTAssertTrue(app.buttons["settings.folder-sync.choose"].waitForExistence(timeout: 5))
+    }
+
     func testTappingAmountAreaFocusesNoteAndRestoresKeypad() throws {
         let app = makeApplication()
         app.launch()

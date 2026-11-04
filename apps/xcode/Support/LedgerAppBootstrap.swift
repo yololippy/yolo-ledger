@@ -95,7 +95,19 @@ final class LedgerAppBootstrap {
             coordinator.start()
             #endif
             if isUITestStore {
-                folderSyncController.update(folderName: nil, state: .notConfigured)
+                if isFolderSyncUITest {
+                    folderSyncController.installActions(
+                        selectFolder: { _ in },
+                        synchronize: {},
+                        stop: { [folderSyncController] in
+                            folderSyncController.update(folderName: nil, state: .notConfigured)
+                        },
+                        localMutation: {}
+                    )
+                    folderSyncController.update(folderName: "测试同步文件夹", state: .idle(lastReport: nil))
+                } else {
+                    folderSyncController.update(folderName: nil, state: .notConfigured)
+                }
             } else {
                 folderSyncCoordinator = LedgerFolderSyncCoordinator(
                     synchronizer: repository,
@@ -130,6 +142,14 @@ final class LedgerAppBootstrap {
     private var isUITestStore: Bool {
         #if DEBUG
         ProcessInfo.processInfo.arguments.contains("--ui-test-store")
+        #else
+        false
+        #endif
+    }
+
+    private var isFolderSyncUITest: Bool {
+        #if DEBUG
+        ProcessInfo.processInfo.arguments.contains("--ui-test-folder-sync")
         #else
         false
         #endif

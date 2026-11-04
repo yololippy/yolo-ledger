@@ -612,14 +612,14 @@ private struct LedgerProfileView: View {
                 Text(YoloLedgerProduct.displayNameWithEnglish).font(.caption).foregroundStyle(theme.muted).frame(maxWidth: .infinity).padding(.top, 15)
             }.padding(24).frame(maxWidth: 700).frame(maxWidth: .infinity)
         }
-        .confirmationDialog("停止使用这个同步文件夹？", isPresented: $confirmsStop, titleVisibility: .visible) {
-            Button("停止使用", role: .destructive) {
+        .alert("关闭文件夹同步？", isPresented: $confirmsStop) {
+            Button("取消", role: .cancel) {}
+            Button("关闭同步") {
                 folderSync?.stopUsingFolder()
             }
             .accessibilityIdentifier("settings.folder-sync.stop.confirm")
-            Button("取消", role: .cancel) {}
         } message: {
-            Text("本机账目会继续保留；文件夹中的交换文件不会被删除。")
+            Text("本机账目会继续保留，文件夹中的同步文件不会删除。以后可以重新选择文件夹继续同步。")
         }
     }
 
@@ -719,9 +719,13 @@ private struct LedgerProfileView: View {
                     .disabled(folderSync?.isSynchronizing == true)
                     .accessibilityIdentifier("settings.folder-sync.replace")
                 }
-                Button("停止使用", role: .destructive) {
+                Button {
                     confirmsStop = true
+                } label: {
+                    Label("关闭文件夹同步", systemImage: "xmark.circle")
+                        .frame(maxWidth: .infinity)
                 }
+                .buttonStyle(PaperButtonStyle())
                 .disabled(folderSync?.isSynchronizing == true)
                 .accessibilityIdentifier("settings.folder-sync.stop")
             } else {
