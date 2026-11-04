@@ -131,13 +131,16 @@ final class NavigationSmokeTests: XCTestCase {
         app.buttons["scheduled-entry.editor.save"].tap()
 
         XCTAssertTrue(app.staticTexts["每月房租"].waitForExistence(timeout: 10))
-        XCTAssertTrue(app.staticTexts["已启用"].exists)
+        XCTAssertTrue(app.staticTexts["将按计划自动记账"].exists)
         let toggleButton = app.buttons.matching(
             NSPredicate(format: "identifier BEGINSWITH %@", "scheduled-entry.toggle.")
         ).firstMatch
         XCTAssertTrue(toggleButton.exists)
         toggleButton.tap()
-        XCTAssertTrue(app.staticTexts["已暂停"].waitForExistence(timeout: 5))
+        let viewPausedRule = app.buttons["scheduled-entry.transition.view"]
+        XCTAssertTrue(viewPausedRule.waitForExistence(timeout: 3))
+        viewPausedRule.tap()
+        XCTAssertTrue(app.staticTexts["暂停期间不会自动记账"].waitForExistence(timeout: 5))
 
         let editButton = app.buttons.matching(
             NSPredicate(format: "identifier BEGINSWITH %@", "scheduled-entry.edit.")
@@ -160,6 +163,50 @@ final class NavigationSmokeTests: XCTestCase {
         app.buttons["scheduled-entry.done"].tap()
         navigate(app, destination: "details", title: "明细")
         XCTAssertTrue(app.staticTexts["每月房租"].waitForExistence(timeout: 10))
+    }
+
+    func testScheduledEntryGroupsEnabledAndPausedRules() throws {
+        let app = makeApplication()
+        app.launchArguments.append("--ui-test-scheduled-entries")
+        app.launch()
+
+        navigate(app, destination: "settings", title: "我的")
+        XCTAssertTrue(app.buttons["settings.scheduled-entry.open"].waitForExistence(timeout: 15))
+        app.buttons["settings.scheduled-entry.open"].tap()
+        XCTAssertTrue(app.staticTexts["定时记账"].waitForExistence(timeout: 10))
+
+        app.buttons["scheduled-entry.add"].tap()
+        clearAndType(app.textFields["scheduled-entry.editor.amount"], text: "1250.00")
+        clearAndType(app.textFields["scheduled-entry.editor.note"], text: "消费贷")
+        app.buttons["scheduled-entry.editor.save"].tap()
+        XCTAssertTrue(app.staticTexts["消费贷"].waitForExistence(timeout: 10))
+
+        app.buttons["scheduled-entry.add"].tap()
+        clearAndType(app.textFields["scheduled-entry.editor.amount"], text: "5428.00")
+        clearAndType(app.textFields["scheduled-entry.editor.note"], text: "闪电贷")
+        app.buttons["scheduled-entry.editor.save"].tap()
+        XCTAssertTrue(app.staticTexts["闪电贷"].waitForExistence(timeout: 10))
+
+        let firstRule = app.staticTexts["消费贷"]
+        let secondRule = app.staticTexts["闪电贷"]
+        let enabledGroup = app.descendants(matching: .any)["scheduled-entry.group.enabled"]
+        let originalEnabledGroupY = enabledGroup.frame.minY
+        let toggles = app.buttons.matching(
+            NSPredicate(format: "identifier BEGINSWITH %@", "scheduled-entry.toggle.")
+        )
+        XCTAssertEqual(toggles.count, 2)
+        toggles.element(boundBy: 0).tap()
+
+        let viewMovedRule = app.buttons["scheduled-entry.transition.view"]
+        XCTAssertTrue(viewMovedRule.waitForExistence(timeout: 3))
+        XCTAssertTrue(secondRule.exists)
+        XCTAssertEqual(enabledGroup.frame.minY, originalEnabledGroupY, accuracy: 2)
+        attachScreenshot(app, name: "scheduled-entry-enabled-group-and-transition")
+        viewMovedRule.tap()
+        XCTAssertTrue(app.staticTexts["暂停期间不会自动记账"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.descendants(matching: .any)["scheduled-entry.group.paused"].exists)
+        XCTAssertTrue(firstRule.isHittable)
+        attachScreenshot(app, name: "scheduled-entry-paused-group")
     }
 
     func testMeowImportCardIsHiddenAfterOneTimeMigration() throws {

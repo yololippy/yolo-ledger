@@ -11,35 +11,69 @@ struct LedgerScheduledEntryView: View {
     let categories: [LedgerCategory]
     @State private var editor: EditorContext?
     @State private var pendingDeletion: LedgerScheduledEntryRule?
+    @State private var togglingRuleID: UUID?
+    @State private var transitionNotice: ScheduledEntryTransitionNotice?
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 14) {
-                    timingNotice
-                    if controller.isLoading && controller.rules.isEmpty {
-                        ProgressView("正在读取规则")
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 44)
-                    } else if let error = controller.loadError, controller.rules.isEmpty {
-                        errorCard(error)
-                    } else if controller.rules.isEmpty {
-                        emptyCard
-                    } else {
-                        ForEach(controller.rules) { rule in ruleCard(rule) }
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 14) {
+                        timingNotice
+                        if controller.isLoading && controller.rules.isEmpty {
+                            ProgressView("正在读取规则")
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 44)
+                        } else if let error = controller.loadError, controller.rules.isEmpty {
+                            errorCard(error)
+                        } else if controller.rules.isEmpty {
+                            emptyCard
+                        } else {
+                            groupHeader(
+                                title: "正在执行",
+                                count: enabledRules.count,
+                                systemImage: "play.circle.fill",
+                                color: theme.primary
+                            )
+                            .id(ScheduledEntryRuleGroup.enabled.anchorID)
+                            .accessibilityIdentifier("scheduled-entry.group.enabled")
+                            if enabledRules.isEmpty {
+                                groupEmptyMessage("暂无正在执行的规则")
+                            } else {
+                                ForEach(enabledRules) { rule in ruleCard(rule) }
+                            }
+
+                            groupHeader(
+                                title: "已暂停",
+                                count: pausedRules.count,
+                                systemImage: "pause.circle.fill",
+                                color: theme.muted
+                            )
+                            .id(ScheduledEntryRuleGroup.paused.anchorID)
+                            .accessibilityIdentifier("scheduled-entry.group.paused")
+                            if pausedRules.isEmpty {
+                                groupEmptyMessage("暂无已暂停的规则")
+                            } else {
+                                ForEach(pausedRules) { rule in ruleCard(rule) }
+                            }
+                        }
+                        if let error = controller.operationError {
+                            Label(error, systemImage: "exclamationmark.triangle.fill")
+                                .font(.caption)
+                                .foregroundStyle(theme.error)
+                                .accessibilityIdentifier("scheduled-entry.operation-error")
+                        }
                     }
-                    if let error = controller.operationError {
-                        Label(error, systemImage: "exclamationmark.triangle.fill")
-                            .font(.caption)
-                            .foregroundStyle(theme.error)
-                            .accessibilityIdentifier("scheduled-entry.operation-error")
-                    }
+                    .padding(20)
+                    .frame(maxWidth: 680)
+                    .frame(maxWidth: .infinity)
+                    .animation(.snappy(duration: 0.28), value: enabledRules.map(\.id))
+                    .animation(.snappy(duration: 0.28), value: pausedRules.map(\.id))
                 }
-                .padding(20)
-                .frame(maxWidth: 680)
-                .frame(maxWidth: .infinity)
+                .background(PaperBackground())
+                .refreshable { await controller.load() }
+                .overlay(alignment: .top) { transitionBanner(proxy: proxy) }
             }
-            .background(PaperBackground())
             .navigationTitle("定时记账")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -56,7 +90,6 @@ struct LedgerScheduledEntryView: View {
                 }
             }
             .task { await controller.load() }
-            .refreshable { await controller.load() }
             .sheet(item: $editor) { context in
                 LedgerScheduledEntryEditorView(
                     controller: controller,
@@ -85,6 +118,14 @@ struct LedgerScheduledEntryView: View {
             }
         }
         .interactiveDismissDisabled(controller.isSaving)
+    }
+
+    private var enabledRules: [LedgerScheduledEntryRule] {
+        controller.rules.filter(\.isEnabled)
+    }
+
+    private var pausedRules: [LedgerScheduledEntryRule] {
+        controller.rules.filter { !$0.isEnabled }
     }
 
     private var timingNotice: some View {
@@ -133,13 +174,83 @@ struct LedgerScheduledEntryView: View {
         .accessibilityIdentifier("scheduled-entry.load-error")
     }
 
+    private func groupHeader(
+        title: String,
+        count: Int,
+        systemImage: String,
+        color: Color
+    ) -> some View {
+        HStack(spacing: 8) {
+            Label(title, systemImage: systemImage)
+                .font(.headline)
+                .foregroundStyle(color)
+            Text("\(count)")
+                .font(.caption.bold())
+                .foregroundStyle(color)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(color.opacity(0.12), in: Capsule())
+            Spacer()
+        }
+        .padding(.top, 4)
+        .accessibilityElement(children: .combine)
+    }
+
+    private func groupEmptyMessage(_ message: String) -> some View {
+        Text(message)
+            .font(.caption)
+            .foregroundStyle(theme.muted)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+            .background(theme.surface.opacity(0.7), in: RoundedRectangle(cornerRadius: 10))
+    }
+
+    @ViewBuilder
+    private func transitionBanner(proxy: ScrollViewProxy) -> some View {
+        if let notice = transitionNotice {
+            HStack(spacing: 10) {
+                Image(systemName: notice.target == .enabled ? "play.circle.fill" : "pause.circle.fill")
+                    .foregroundStyle(notice.target == .enabled ? theme.primary : theme.muted)
+                Text(notice.message)
+                    .font(.caption)
+                    .lineLimit(2)
+                Spacer(minLength: 4)
+                Button("查看") {
+                    withAnimation(.snappy) {
+                        proxy.scrollTo(notice.target.anchorID, anchor: .top)
+                        transitionNotice = nil
+                    }
+                }
+                .font(.caption.bold())
+                .foregroundStyle(theme.primary)
+                .accessibilityIdentifier("scheduled-entry.transition.view")
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .background(theme.surface, in: RoundedRectangle(cornerRadius: 12))
+            .overlay {
+                RoundedRectangle(cornerRadius: 12)
+                    .strokeBorder(theme.ink, lineWidth: 1.2)
+            }
+            .shadow(color: theme.shadow, radius: 8, y: 3)
+            .padding(.horizontal, 20)
+            .padding(.top, 8)
+            .transition(.move(edge: .top).combined(with: .opacity))
+        }
+    }
+
     private func ruleCard(_ rule: LedgerScheduledEntryRule) -> some View {
-        VStack(alignment: .leading, spacing: 13) {
+        let cardInk = rule.isEnabled ? theme.ink : theme.muted
+        let cardFill = rule.isEnabled ? theme.surface : theme.calendarIdle
+
+        return VStack(alignment: .leading, spacing: 13) {
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 5) {
                     Text(rule.note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? categoryName(rule.categoryID) : rule.note)
                         .font(.headline)
                         .lineLimit(1)
+                        .foregroundStyle(cardInk)
                     Text("\(bookName(rule.bookID)) · \(categoryName(rule.categoryID))")
                         .font(.caption)
                         .foregroundStyle(theme.muted)
@@ -147,27 +258,42 @@ struct LedgerScheduledEntryView: View {
                 Spacer()
                 Text("¥\(rule.amount.decimalString)")
                     .font(.system(.headline, design: .rounded))
+                    .foregroundStyle(cardInk)
             }
-            DashedRule()
+            DashedRule().opacity(rule.isEnabled ? 1 : 0.45)
             HStack {
                 Label(rule.kind.title, systemImage: rule.kind == .expense ? "arrow.up.right" : "arrow.down.left")
                 Spacer()
                 Text(scheduleText(rule.monthlyDay))
-                Text(rule.isEnabled ? "已启用" : "已暂停")
-                    .font(.caption.bold())
-                    .padding(.horizontal, 9)
-                    .padding(.vertical, 5)
-                    .background(rule.isEnabled ? theme.primarySoft : theme.shadow.opacity(0.35), in: Capsule())
             }
             .font(.caption)
+            .foregroundStyle(cardInk)
+            Label(
+                rule.isEnabled ? "将按计划自动记账" : "暂停期间不会自动记账",
+                systemImage: rule.isEnabled ? "calendar.badge.checkmark" : "calendar.badge.exclamationmark"
+            )
+            .font(.caption)
+            .foregroundStyle(rule.isEnabled ? theme.primary : theme.muted)
+            .accessibilityIdentifier("scheduled-entry.status-detail.\(rule.id.uuidString)")
             HStack(spacing: 10) {
                 Button("编辑") { editor = EditorContext(rule: rule) }
                     .buttonStyle(PaperButtonStyle())
                     .accessibilityIdentifier("scheduled-entry.edit.\(rule.id.uuidString)")
-                Button(rule.isEnabled ? "暂停" : "启用") {
-                    Task { _ = await controller.setEnabled(!rule.isEnabled, for: rule) }
+                Button {
+                    togglingRuleID = rule.id
+                    Task {
+                        let succeeded = await controller.setEnabled(!rule.isEnabled, for: rule)
+                        togglingRuleID = nil
+                        if succeeded { showTransitionNotice(for: rule) }
+                    }
+                } label: {
+                    if togglingRuleID == rule.id {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Text(rule.isEnabled ? "暂停" : "恢复启用")
+                    }
                 }
-                .buttonStyle(PaperButtonStyle(fill: theme.primarySoft))
+                .buttonStyle(PaperButtonStyle(fill: rule.isEnabled ? theme.surface : theme.primarySoft))
                 .accessibilityIdentifier("scheduled-entry.toggle.\(rule.id.uuidString)")
                 Button(role: .destructive) { pendingDeletion = rule } label: {
                     Image(systemName: "trash").frame(width: 32)
@@ -178,10 +304,36 @@ struct LedgerScheduledEntryView: View {
             }
         }
         .padding(17)
-        .paperCard()
+        .background(cardFill, in: RoundedRectangle(cornerRadius: 12))
+        .overlay {
+            RoundedRectangle(cornerRadius: 12)
+                .strokeBorder(rule.isEnabled ? theme.ink : theme.muted.opacity(0.7), lineWidth: rule.isEnabled ? 1.5 : 1.2)
+        }
         .disabled(controller.isSaving)
+        .id("scheduled-entry-rule-\(rule.id.uuidString)-\(rule.isEnabled)")
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("scheduled-entry.rule.\(rule.id.uuidString)")
+    }
+
+    private func showTransitionNotice(for rule: LedgerScheduledEntryRule) {
+        let target: ScheduledEntryRuleGroup = rule.isEnabled ? .paused : .enabled
+        let action = rule.isEnabled ? "已暂停" : "已恢复"
+        let targetName = rule.isEnabled ? "已暂停" : "正在执行"
+        let notice = ScheduledEntryTransitionNotice(
+            message: "“\(ruleTitle(rule))”\(action)，已移至「\(targetName)」",
+            target: target
+        )
+        withAnimation(.snappy) { transitionNotice = notice }
+        Task {
+            try? await Task.sleep(for: .seconds(4))
+            guard transitionNotice?.id == notice.id else { return }
+            withAnimation(.easeOut(duration: 0.2)) { transitionNotice = nil }
+        }
+    }
+
+    private func ruleTitle(_ rule: LedgerScheduledEntryRule) -> String {
+        let note = rule.note.trimmingCharacters(in: .whitespacesAndNewlines)
+        return note.isEmpty ? categoryName(rule.categoryID) : note
     }
 
     private func bookName(_ id: UUID) -> String { books.first { $0.id == id }?.name ?? "未找到账本" }
@@ -192,6 +344,24 @@ struct LedgerScheduledEntryView: View {
         case .lastDay: "每月最后一天"
         }
     }
+}
+
+private enum ScheduledEntryRuleGroup: Equatable {
+    case enabled
+    case paused
+
+    var anchorID: String {
+        switch self {
+        case .enabled: "scheduled-entry-group-enabled-anchor"
+        case .paused: "scheduled-entry-group-paused-anchor"
+        }
+    }
+}
+
+private struct ScheduledEntryTransitionNotice: Identifiable {
+    let id = UUID()
+    let message: String
+    let target: ScheduledEntryRuleGroup
 }
 
 private struct EditorContext: Identifiable {

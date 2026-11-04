@@ -164,16 +164,16 @@ public final class LedgerScheduledEntryController {
     }
 
     private func replace(_ rule: LedgerScheduledEntryRule) {
-        rules.removeAll { $0.id == rule.id }
-        rules.append(rule)
-        rules.sort(by: Self.ruleOrder)
+        if let index = rules.firstIndex(where: { $0.id == rule.id }) {
+            rules[index] = rule
+        } else {
+            rules.append(rule)
+            rules.sort(by: Self.ruleOrder)
+        }
     }
 
     private static func ruleOrder(_ left: LedgerScheduledEntryRule, _ right: LedgerScheduledEntryRule) -> Bool {
-        if left.isEnabled != right.isEnabled { return left.isEnabled && !right.isEnabled }
-        if left.effectiveStartMonth != right.effectiveStartMonth {
-            return left.effectiveStartMonth < right.effectiveStartMonth
-        }
+        if left.createdAt != right.createdAt { return left.createdAt < right.createdAt }
         return left.id.uuidString < right.id.uuidString
     }
 

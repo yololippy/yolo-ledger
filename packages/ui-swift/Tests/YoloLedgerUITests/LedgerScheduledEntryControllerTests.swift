@@ -43,9 +43,17 @@ struct LedgerScheduledEntryControllerTests {
     }
 
     @Test
-    func loadCanRetryAndSortsEnabledRulesFirst() async throws {
-        let paused = try rule(enabled: false, month: LedgerYearMonth(year: 2026, month: 12))
-        let enabled = try rule(enabled: true, month: LedgerYearMonth(year: 2026, month: 11))
+    func loadCanRetryAndUsesStableCreationOrder() async throws {
+        let paused = try rule(
+            enabled: false,
+            month: LedgerYearMonth(year: 2026, month: 12),
+            createdAt: Date(timeIntervalSince1970: 1_760_000_000)
+        )
+        let enabled = try rule(
+            enabled: true,
+            month: LedgerYearMonth(year: 2026, month: 11),
+            createdAt: Date(timeIntervalSince1970: 1_760_000_060)
+        )
         let repository = ScheduledRepositoryStub(rules: [paused, enabled])
         await repository.setReadFailure(true)
         let controller = LedgerScheduledEntryController(repository: repository)
@@ -56,8 +64,31 @@ struct LedgerScheduledEntryControllerTests {
 
         await repository.setReadFailure(false)
         await controller.load()
-        #expect(controller.rules.map(\.id) == [enabled.id, paused.id])
+        #expect(controller.rules.map(\.id) == [paused.id, enabled.id])
         #expect(controller.loadError == nil)
+    }
+
+    @Test
+    func pausingRuleKeepsItsPosition() async throws {
+        let month = try LedgerYearMonth(year: 2026, month: 11)
+        let first = try rule(
+            enabled: true,
+            month: month,
+            createdAt: Date(timeIntervalSince1970: 1_760_000_000)
+        )
+        let second = try rule(
+            enabled: true,
+            month: month,
+            createdAt: Date(timeIntervalSince1970: 1_760_000_060)
+        )
+        let repository = ScheduledRepositoryStub(rules: [second, first])
+        let controller = LedgerScheduledEntryController(repository: repository)
+        await controller.load()
+        let originalOrder = controller.rules.map(\.id)
+
+        #expect(await controller.setEnabled(false, for: first))
+        #expect(controller.rules.map(\.id) == originalOrder)
+        #expect(controller.rules.first?.isEnabled == false)
     }
 
     @Test
@@ -193,9 +224,9 @@ struct LedgerScheduledEntryControllerTests {
 
     private func rule(
         enabled: Bool,
-        month: LedgerYearMonth
+        month: LedgerYearMonth,
+        createdAt: Date = Date(timeIntervalSince1970: 1_760_000_000)
     ) throws -> LedgerScheduledEntryRule {
-        let created = Date(timeIntervalSince1970: 1_760_000_000)
         return try LedgerScheduledEntryRule(
             id: UUID(),
             bookID: LedgerSeedData.defaultBook.id,
@@ -206,8 +237,8 @@ struct LedgerScheduledEntryControllerTests {
             monthlyDay: .fixed(8),
             isEnabled: enabled,
             effectiveStartMonth: month,
-            createdAt: created,
-            updatedAt: created
+            createdAt: createdAt,
+            updatedAt: createdAt
         )
     }
 }
