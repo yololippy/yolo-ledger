@@ -21,7 +21,7 @@ struct YoloLedgerIOSApp: App {
 @MainActor
 private struct YoloLedgerIOSRoot: View {
     let bootstrap: LedgerAppBootstrap
-    @State private var pendingScreenshotProposal = ScreenshotImportStore.load()
+    @State private var pendingScreenshotProposal: LedgerScreenshotProposal? = nil
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
@@ -30,21 +30,19 @@ private struct YoloLedgerIOSRoot: View {
             pendingScreenshotProposal: $pendingScreenshotProposal
         )
         .preferredColorScheme(.light)
+        .task {
+            reloadPendingScreenshot()
+        }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active, let proposal = ScreenshotImportStore.load() {
-                pendingScreenshotProposal = proposal
-            }
+            if phase == .active { reloadPendingScreenshot() }
         }
         .onReceive(NotificationCenter.default.publisher(for: ScreenshotImportStore.pendingDidChange)) { _ in
             reloadPendingScreenshot()
         }
-        .onChange(of: pendingScreenshotProposal?.id) { _, proposalID in
-            if proposalID == nil { ScreenshotImportStore.clear() }
-        }
     }
 
     private func reloadPendingScreenshot() {
-        guard let proposal = ScreenshotImportStore.load(),
+        guard let proposal = ScreenshotImportStore.take(),
               proposal.id != pendingScreenshotProposal?.id
         else { return }
         pendingScreenshotProposal = proposal

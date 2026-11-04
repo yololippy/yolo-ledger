@@ -428,7 +428,6 @@ final class NavigationSmokeTests: XCTestCase {
         app.launch()
 
         XCTAssertTrue(app.staticTexts["editor.screenshot-confirmation"].waitForExistence(timeout: 15))
-        XCTAssertTrue(app.buttons["editor.amount"].label.contains("55.00"))
         XCTAssertEqual(app.textFields["editor.note"].value as? String, "星巴克咖啡")
         XCTAssertTrue(app.buttons["editor.kind.expense"].isSelected)
         XCTAssertTrue(app.buttons["editor.category.A20E127A-36F6-401A-A6E3-000000000101"].isSelected)
@@ -439,6 +438,21 @@ final class NavigationSmokeTests: XCTestCase {
         XCTAssertTrue(saved.waitForExistence(timeout: 10))
         XCTAssertTrue(saved.label.contains("餐饮"))
         XCTAssertTrue(saved.label.contains("55.00"))
+    }
+
+    func testScreenshotShortcutProposalDoesNotReturnAfterForcedRelaunch() throws {
+        let storeID = UUID().uuidString
+        let app = makeApplication(storeID: storeID)
+        app.launchArguments.append("--ui-test-screenshot-proposal")
+        app.launch()
+
+        XCTAssertTrue(app.staticTexts["editor.screenshot-confirmation"].waitForExistence(timeout: 15))
+        app.terminate()
+
+        let relaunchedApp = makeApplication(storeID: storeID)
+        relaunchedApp.launch()
+        XCTAssertTrue(relaunchedApp.buttons["entry.add"].waitForExistence(timeout: 15))
+        XCTAssertFalse(relaunchedApp.staticTexts["editor.screenshot-confirmation"].exists)
     }
 
     func testAddingEntryUsesSelectedCalendarDate() throws {

@@ -88,6 +88,9 @@ private enum ScreenshotTextRecognizer {
 enum ScreenshotImportStore {
     private static let pendingKey = "pending-screenshot-entry-v1"
     static let pendingDidChange = Notification.Name("YoloLedgerPendingScreenshotDidChange")
+    #if DEBUG
+    @MainActor private static var didSeedUITestProposal = false
+    #endif
 
     @MainActor
     static func save(_ proposal: LedgerScreenshotProposal) throws {
@@ -99,10 +102,13 @@ enum ScreenshotImportStore {
         }
     }
 
-    static func load() -> LedgerScreenshotProposal? {
+    @MainActor
+    static func take() -> LedgerScreenshotProposal? {
         #if DEBUG
-        if ProcessInfo.processInfo.arguments.contains("--ui-test-screenshot-proposal") {
-            return LedgerScreenshotProposal(
+        if ProcessInfo.processInfo.arguments.contains("--ui-test-screenshot-proposal"),
+           !didSeedUITestProposal {
+            didSeedUITestProposal = true
+            let proposal = LedgerScreenshotProposal(
                 amountMinorUnits: 5_500,
                 merchant: "星巴克咖啡",
                 transactionDate: Date(),
@@ -111,12 +117,17 @@ enum ScreenshotImportStore {
                 recognizedText: "支付成功\n星巴克咖啡\n实付 ¥55.00",
                 confidence: .high
             )
+            if let data = try? JSONEncoder().encode(proposal) {
+                UserDefaults.standard.set(data, forKey: pendingKey)
+            }
         }
         #endif
+        defer { clear() }
         guard let data = UserDefaults.standard.data(forKey: pendingKey) else { return nil }
         return try? JSONDecoder().decode(LedgerScreenshotProposal.self, from: data)
     }
 
+    @MainActor
     static func clear() {
         UserDefaults.standard.removeObject(forKey: pendingKey)
     }
