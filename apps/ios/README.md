@@ -8,6 +8,14 @@
 
 `ScreenshotLedgerIntent.swift` 提供 iOS 快捷指令“截图记账”：通过 Vision 在设备端 OCR，将结构化候选结果暂存并打开共享记账确认页。原图不写入账库；完整配置与验收边界见 [快捷指令截图记账说明](../../docs/screenshot-shortcut.md)。
 
+截图记账先在后台识别并暂存候选结果，再请求系统转到前台确认。iOS 26 及以上使用 `supportedModes = [.background, .foreground(.dynamic)]` 和 `continueInForeground(alwaysConfirm: false)`，取消 App 强制要求的“Cancel / Continue”确认，在系统允许时直接进入记账确认页；Apple 仍可能根据运行条件要求确认，不能保证所有场景均无系统提示。iOS 17–18 保留 `ForegroundContinuableIntent` 的 `requestToContinueInForeground` 兼容路径，该接口没有 `alwaysConfirm` 参数，且 `openAppWhenRun = false`，避免把前台启动作为 OCR 的前置条件。无法转到前台时提示手动解锁并打开 App，待确认结果保留到 App 真正进入前台。识别完成仍需用户确认保存，不会直接写入账库。
+
+快捷指令继续使用“截取屏幕 → 有落记账的截图记账”，无需另加“打开 App”。Intent 类型 `ScreenshotLedgerIntent`、参数 `screenshot` 与 Bundle ID 均保持不变，已有快捷指令可继续使用。
+
+2026-11-07 启动故障复核：真机系统明确以 `invalid code signature / inadequate entitlements / profile not explicitly trusted` 拒绝启动 App，属于已安装包的签名、权限或描述文件信任问题。使用当前工程 entitlements 和 Xcode 自动签名覆盖安装后，App 构建、安装、启动成功；同一快捷指令未改配置，重新运行已进入 OCR，随后提示“截图中没有识别到文字”。这验证了启动拒绝已解除，尚不代表有效支付截图到确认保存的完整链路已通过。没有证据表明本次故障源于旧快捷指令缓存，无需删除重建动作；前台兼容逻辑也不能修复无效签名。遇到同类系统错误应核对签名与设备信任状态，并覆盖安装有效签名版本；不要卸载 App，以免删除本地账库。
+
+启动策略依据 Apple 的 [App Intents 运行方式](https://developer.apple.com/documentation/appintents/configuring-the-runtime-behavior-of-your-app-intents) 与 [旧系统前台继续接口](https://developer.apple.com/documentation/appintents/foregroundcontinuableintent)。前台切换受设备锁定、系统条件及用户选择约束，构建通过不代表真机“轻点背面”链路已验收。
+
 “我的”页面提供“轻点两下，截图记账”配置入口。用户首次在快捷指令中组合“截取屏幕 → 有落记账截图”，再到系统“轻点背面”绑定；iOS 不允许 App 自动修改该系统设置。
 
 Bundle ID：`com.yololedger.app`，与 Mac Target 保持一致。`TARGETED_DEVICE_FAMILY=1`，关闭 Mac Catalyst、Designed for iPhone on Mac 和 Vision 兼容入口。工程临时构建基线为 iOS 17，正式最低支持版本仍待确定。

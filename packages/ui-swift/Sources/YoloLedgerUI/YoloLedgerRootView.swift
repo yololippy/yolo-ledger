@@ -593,6 +593,9 @@ private struct LedgerProfileView: View {
                     shortcutStep(number: 1, text: "在快捷指令中新建“\(YoloLedgerProduct.screenshotShortcutName)”")
                     shortcutStep(number: 2, text: "依次加入“截取屏幕”和“\(YoloLedgerProduct.displayName)”的“截图记账”")
                     shortcutStep(number: 3, text: "前往设置 → 辅助功能 → 触控 → 轻点背面 → 轻点两下，选择该快捷指令")
+                    Text("识别成功后打开有落记账，核对后保存。若未自动打开，可解锁后手动打开 App，识别结果会保留。")
+                        .font(.caption)
+                        .foregroundStyle(theme.muted)
                     Button {
                         guard let url = URL(string: "shortcuts://") else { return }
                         openURL(url)

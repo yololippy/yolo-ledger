@@ -42,7 +42,10 @@ private struct YoloLedgerIOSRoot: View {
     }
 
     private func reloadPendingScreenshot() {
-        guard let proposal = ScreenshotImportStore.take(),
+        // Background intents can finish OCR while iOS still denies foreground
+        // access. Do not consume the persisted proposal until the app is visible.
+        guard scenePhase == .active,
+              let proposal = ScreenshotImportStore.take(),
               proposal.id != pendingScreenshotProposal?.id
         else { return }
         pendingScreenshotProposal = proposal

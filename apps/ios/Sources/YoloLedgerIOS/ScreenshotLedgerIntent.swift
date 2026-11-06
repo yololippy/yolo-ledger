@@ -7,7 +7,10 @@ import YoloLedgerCore
 struct ScreenshotLedgerIntent: AppIntent {
     static let title: LocalizedStringResource = "截图记账"
     static let description = IntentDescription("识别支付截图中的金额、商户和时间，打开确认页后记账。图片只在设备上处理。")
-    static var openAppWhenRun: Bool { true }
+    // Back Tap starts Shortcuts outside our app. Recognize and persist before
+    // asking the system to bring up the confirmation UI.
+    @available(iOS 26.0, *)
+    static var supportedModes: IntentModes { [.background, .foreground(.dynamic)] }
 
     @Parameter(
         title: "支付截图",
@@ -27,8 +30,35 @@ struct ScreenshotLedgerIntent: AppIntent {
         }
         let proposal = try await ScreenshotTextRecognizer.recognize(imageData: screenshot.data)
         try await ScreenshotImportStore.save(proposal)
+        do {
+            if #available(iOS 26.0, *) {
+                if systemContext.currentMode != .foreground {
+                    guard systemContext.currentMode.canContinueInForeground else {
+                        throw ScreenshotLedgerIntentError.cannotOpenConfirmation
+                    }
+                    try await continueInForeground(
+                        "截图已识别，打开有落记账核对后保存。",
+                        alwaysConfirm: false
+                    )
+                }
+            } else {
+                try await requestToContinueInForeground("截图已识别，打开有落记账核对后保存。")
+            }
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            // Keep the proposal for manual launch if iOS refuses the transition.
+            throw ScreenshotLedgerIntentError.cannotOpenConfirmation
+        }
         return .result()
     }
+}
+
+// Keep the existing intent and parameter identities for saved shortcuts on iOS
+// 17–18; iOS 26+ uses supportedModes and continueInForeground instead.
+@available(iOS, deprecated: 26.0)
+extension ScreenshotLedgerIntent: ForegroundContinuableIntent {
+    static var openAppWhenRun: Bool { false }
 }
 
 struct YoloLedgerShortcuts: AppShortcutsProvider {
@@ -138,6 +168,7 @@ private enum ScreenshotLedgerIntentError: LocalizedError {
     case unreadableImage
     case noText
     case cannotPrepareConfirmation
+    case cannotOpenConfirmation
 
     var errorDescription: String? {
         switch self {
@@ -145,6 +176,7 @@ private enum ScreenshotLedgerIntentError: LocalizedError {
         case .unreadableImage: "无法读取这张截图，请换一张清晰图片。"
         case .noText: "截图中没有识别到文字。"
         case .cannotPrepareConfirmation: "识别结果暂时无法交给\(YoloLedgerProduct.displayName)，请重试。"
+        case .cannotOpenConfirmation: "截图已识别，尚未记账。请解锁并打开\(YoloLedgerProduct.displayName)，核对后保存。"
         }
     }
 }
